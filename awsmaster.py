@@ -31,7 +31,6 @@ class Main(object):
         return True
 
     def parse_options(self):
-
         if len(argv) == 1:
             self.display_usage()
             exit()
@@ -69,6 +68,7 @@ class Main(object):
         self.display_version()
         print('''Usage: %s [OPTIONS]
 AVAILABLE OPTIONS:
+list            Print list of instances
 -h, --help      Print this help summary page
 -v, --version   Print version number''' % self.__name)
 
