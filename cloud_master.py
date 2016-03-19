@@ -12,20 +12,20 @@ from boto3 import Session
 from botocore import exceptions
 from prettytable import PrettyTable
 from datetime import datetime
+from abc import ABCMeta, abstractmethod
 
 
 class Main(object):
-    _version = '16.3.18'
+    _version = '16.3.19'
     _name = path.basename(argv[0])
-    _profile_name = None
-    _cloud_provider = None
-    _cloud = None
-    _disable_border = False
-    _disable_header = False
-    _region = None
-    _state = []
 
     def __init__(self):
+        self._profile_name = None
+        self._cloud_provider = None
+        self._disable_border = False
+        self._disable_header = False
+        self._region = None
+        self._state = []
         action = self.parse_args()
         self._cloud = Cloud.loader(self._cloud_provider, self._profile_name, self._region)
         if action == 'list-instances':
@@ -52,7 +52,7 @@ class Main(object):
                             help='show version', action='store_true', dest='version')
         parser.add_argument('action', nargs='?', choices=['list-instances', 'list-regions'])
         parser.add_argument('-c', '--cloud-provider', help='cloud provider (default: %(default)s)',
-                            dest='cloud_provider', choices=['aws'], default='aws')
+                            dest='cloud_provider', choices=['aws', 'gce', 'azure'], default='aws')
         parser.add_argument('-p', '--profile-name', help='cloud profile name (default: %(default)s)',
                             dest='profile_name', default='default')
         parser.add_argument('-b', '--disable-border', help='disable table border', action='store_true',
@@ -80,6 +80,8 @@ class Main(object):
 
 
 class Cloud(object):
+    __metaclass__ = ABCMeta
+
     def __init__(self, cloud_provider, profile_name, region):
         self._cloud_provider = cloud_provider
         self._profile_name = profile_name
@@ -89,6 +91,14 @@ class Cloud(object):
     def loader(cloud_provider, profile_name, region):
         classes = {'aws': AWS, 'azure': AZURE, 'gce': GCE}
         return classes[cloud_provider](cloud_provider, profile_name, region)
+
+    @abstractmethod
+    def list_instances(self):
+        pass
+
+    @abstractmethod
+    def list_regions(self):
+        pass
 
 
 class AWS(Cloud):
@@ -116,10 +126,10 @@ class AWS(Cloud):
                 self._regions = [self._region]
 
     @staticmethod
-    def get_value(lista, key, value, search_value):
+    def get_value(list_a, key, value, search_value):
         name = ''
-        if type(lista) == list:
-            for item in lista:
+        if type(list_a) == list:
+            for item in list_a:
                 if item[key] == search_value:
                     name = item[value]
                     break
@@ -127,7 +137,8 @@ class AWS(Cloud):
 
     @staticmethod
     def date_diff(date1, date2):
-        diff = (date1-date2).total_seconds()
+        diff = (date1-date2)
+        diff = (diff.microseconds + (diff.seconds + diff.days * 24 * 3600) * 10**6) / 10**6
         d = divmod(diff, 86400)
         h = divmod(d[1], 3600)
         m = divmod(h[1], 60)
@@ -201,13 +212,25 @@ class AWS(Cloud):
 class AZURE(Cloud):
     def __init__(self, *args, **kwargs):
         super(AZURE, self).__init__(*args, **kwargs)
-        Main.die('%s cloud not implemented yet, exiting...' % self._cloud_provider.upper())
+        Main.die('%s module not implemented yet, exiting...' % self._cloud_provider.upper())
+
+    def list_instances(self):
+        pass
+
+    def list_regions(self):
+        pass
 
 
 class GCE(Cloud):
     def __init__(self, *args, **kwargs):
         super(GCE, self).__init__(*args, **kwargs)
-        Main.die('%s cloud not implemented yet, exiting...' % self._cloud_provider.upper())
+        Main.die('%s module not implemented yet, exiting...' % self._cloud_provider.upper())
+
+    def list_instances(self):
+        pass
+
+    def list_regions(self):
+        pass
 
 
 if __name__ == '__main__':
