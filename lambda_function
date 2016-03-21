@@ -1,0 +1,81 @@
+#!/usr/bin/env python
+
+from __future__ import print_function
+from json import loads
+from gzip import open
+from botocore import exceptions
+from boto3 import client
+from os import path
+from urllib import unquote_plus
+
+s3 = client('s3')
+
+
+def lambda_handler(event, context):
+    #print("Received event: " + dumps(event, indent=2))
+
+    bucket = event['Records'][0]['s3']['bucket']['name']
+    key = unquote_plus(event['Records'][0]['s3']['object']['key']).decode('utf8')
+    tmp_file = '/tmp/' + path.basename(key)
+
+    try:
+        s3.download_file(bucket, key, tmp_file)
+    except Exception as err:
+        print(err)
+        exit(1)
+
+    with open(tmp_file, 'rb') as f:
+        file_content = f.read()
+
+    events = loads(file_content)['Records']
+
+    for event in events:
+        instance_ids = []
+        response = None
+        if event['eventName'] == 'CreateAutoScalingGroup':
+            user = event['userIdentity']['userName']
+            as_group = event['requestParameters']['autoScalingGroupName']
+            region = event['awsRegion']
+            autoscaling = client('autoscaling', region_name=region)
+            try:
+                print('Tagging in progress... Last_user: %s, autoScalingGroupName: %s' % (user, as_group))
+                response = autoscaling.create_or_update_tags(Tags=[{
+                    'ResourceId': as_group,
+                    'ResourceType': 'auto-scaling-group',
+                    'Key': 'Last_user',
+                    'Value': user,
+                    'PropagateAtLaunch': True
+                }])
+            except exceptions.ClientError as err:
+                print(err)
+            print('HTTP response: %s' % response['ResponseMetadata']['HTTPStatusCode'])
+            response = autoscaling.describe_auto_scaling_groups(AutoScalingGroupNames=[as_group])
+            for instance in response['AutoScalingGroups'][0]['Instances']:
+                instance_ids.append(instance['InstanceId'])
+            ec2 = client('ec2', region_name=region)
+            try:
+                print('Tagging in progress... Last_user: %s, Instances: %s' % (user, ', '.join(instance_ids)))
+                response = ec2.create_tags(Resources=instance_ids, Tags=[{'Key': 'Last_user', 'Value': user}])
+            except exceptions.ClientError as err:
+                print(err)
+            print('HTTP response: %s' % response['ResponseMetadata']['HTTPStatusCode'])
+        elif event['eventName'] in ['RunInstances', 'StartInstances', 'StopInstances']:
+            region = event['awsRegion']
+            if event['userAgent'] == 'autoscaling.amazonaws.com':
+                print('Instance created by AutoScalingGroup, skipping.')
+                continue
+            user = event['userIdentity']['userName']
+            ec2 = client('ec2', region_name=region)
+            try:
+                for item in event['responseElements']['instancesSet']['items']:
+                    instance_ids.append(item['instanceId'])
+            except TypeError as err:
+                print(err)
+                continue
+            try:
+                print('Tagging in progress... Last_user: %s, Instances: %s' % (user, ', '.join(instance_ids)))
+                response = ec2.create_tags(Resources=instance_ids, Tags=[{'Key': 'Last_user', 'Value': user}])
+            except exceptions.ClientError as err:
+                print(err)
+                continue
+            print('HTTP response: %s' % response['ResponseMetadata']['HTTPStatusCode'])

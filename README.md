@@ -1,4 +1,4 @@
-# cloud_master
+# cloud_tools
 A tool to manipulate clouds
 
 ## AWS configuration
@@ -36,21 +36,21 @@ The tool uses Python module Boto 3 to talk to AWS ([Boto 3 documentation](http:/
 
 ## Usage
 ```
-$ ./cloud_master.py list-instances -h
-usage: cloud_master.py [-h] [-v] [-c {aws}] [-p PROFILE_NAME] [-b] [-H]
-                       [-r REGION]
-                       [-s {running,pending,shutting-down,stopped,stopping,terminated}]
-                       [{list-instances,list-regions}]
+$ ./cloud_tools -h
+usage: cloud_tools [-h] [-v] [-c {aws,gce,azure}] [-p PROFILE_NAME] [-b] [-H]
+                   [-r REGION]
+                   [-s {running,pending,shutting-down,stopped,stopping,terminated}]
+                   [{describe-instances,describe-regions}]
 
 A tool to manipulate clouds.
 
 positional arguments:
-  {list-instances,list-regions}
+  {describe-instances,describe-regions}
 
 optional arguments:
   -h, --help            show this help message and exit
   -v, --version         show version
-  -c {aws}, --cloud-provider {aws}
+  -c {aws,gce,azure}, --cloud-provider {aws,gce,azure}
                         cloud provider (default: aws)
   -p PROFILE_NAME, --profile-name PROFILE_NAME
                         cloud profile name (default: default)
