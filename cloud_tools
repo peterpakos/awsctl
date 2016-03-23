@@ -26,7 +26,7 @@ class Main(object):
         self._disable_header = False
         self._region = None
         self._state = []
-        action = self.parse_args()
+        action = self._parse_args()
         self._cloud = Cloud.loader(self._cloud_provider, self._profile_name, self._region)
         if action == 'describe-instances':
             self._cloud.describe_instances(disable_border=self._disable_border,
@@ -37,7 +37,7 @@ class Main(object):
         else:
             self.die('Action %s not implemented yet' % action)
 
-    def display_version(self):
+    def _display_version(self):
         print('%s version %s' % (self._name, self._version))
 
     @staticmethod
@@ -46,7 +46,7 @@ class Main(object):
             print(message, file=stderr)
         exit(code)
 
-    def parse_args(self):
+    def _parse_args(self):
         parser = ArgumentParser(description='A tool to manipulate clouds.')
         parser.add_argument('-v', '--version',
                             help='show version', action='store_true', dest='version')
@@ -65,7 +65,7 @@ class Main(object):
                             dest='state')
         args = parser.parse_args()
         if args.version:
-            self.display_version()
+            self._display_version()
             exit()
         if not args.action:
             parser.print_usage()
@@ -126,7 +126,7 @@ class AWS(Cloud):
                 self._regions = [self._region]
 
     @staticmethod
-    def get_value(list_a, search_value):
+    def _get_value(list_a, search_value):
         name = ''
         if type(list_a) == list:
             for item in list_a:
@@ -136,7 +136,7 @@ class AWS(Cloud):
         return name
 
     @staticmethod
-    def date_diff(date1, date2):
+    def _date_diff(date1, date2):
         diff = (date1-date2)
         diff = (diff.microseconds + (diff.seconds + diff.days * 24 * 3600) * 10**6) / 10**6
         d = divmod(diff, 86400)
@@ -157,8 +157,8 @@ class AWS(Cloud):
     def describe_instances(self, disable_border=False, disable_header=False, state=None):
         if not state:
             state = ['running', 'pending', 'shutting-down', 'stopped', 'stopping', 'terminated']
-        table = PrettyTable(['Zone', 'VPC ID', 'ID', 'Name', 'Type', 'Image', 'State', 'Launch time', 'Uptime', 'Last user',
-                             'SSH key', 'Private IP', 'Public IP'],
+        table = PrettyTable(['Zone', 'VPC ID', 'ID', 'Name', 'Type', 'Image', 'State', 'Launch time', 'Uptime',
+                             'Last user', 'SSH key', 'Private IP', 'Public IP'],
                             border=not disable_border, header=not disable_header, reversesort=True,
                             sortby='Launch time')
         table.align = 'l'
@@ -178,14 +178,14 @@ class AWS(Cloud):
                     vpc_id = ''
                 image_name = ''
                 instance_state = instance.state['Name']
-                last_user = self.get_value(instance.tags, 'Last_user')
+                last_user = self._get_value(instance.tags, 'Last_user')
                 uptime = ''
-                name = self.get_value(instance.tags, 'Name')
+                name = self._get_value(instance.tags, 'Name')
                 launch_time = str(instance.launch_time).partition('+')[0]
                 now = datetime.now()
                 then = datetime.strptime(launch_time, '%Y-%m-%d %H:%M:%S')
                 if instance_state == 'running':
-                    uptime = self.date_diff(now, then)
+                    uptime = self._date_diff(now, then)
                 try:
                     image_name = instance.image.name[0:20]
                 except AttributeError:
