@@ -5,37 +5,37 @@
 # Author: Peter Pakos <peter.pakos@wandisco.com>
 
 from __future__ import print_function
-from sys import stderr, argv
-from os import path
-from argparse import ArgumentParser
-from boto3 import Session
-from botocore import exceptions
-from prettytable import PrettyTable
-from datetime import datetime
-from abc import ABCMeta, abstractmethod
+import os
+import sys
+import abc
+import argparse
+import boto3
+import botocore
+import prettytable
+import datetime
 
 
 class Main(object):
-    _version = '16.3.22'
-    _name = path.basename(argv[0])
+    _version = '16.3.25'
+    _name = os.path.basename(sys.argv[0])
 
     def __init__(self):
-        self._profile_name = None
-        self._cloud_provider = None
-        self._disable_border = False
-        self._disable_header = False
-        self._region = None
-        self._state = []
-        action = self._parse_args()
+        args = self._parse_args()
+        self._profile_name = args.profile_name
+        self._cloud_provider = args.cloud_provider
+        self._disable_border = args.disable_border
+        self._disable_header = args.disable_header
+        self._region = args.region
+        self._state = args.state
         self._cloud = Cloud.loader(self._cloud_provider, self._profile_name, self._region)
-        if action == 'describe-instances':
+        if args.action == 'describe-instances':
             self._cloud.describe_instances(disable_border=self._disable_border,
                                            disable_header=self._disable_header,
                                            state=self._state)
-        elif action == 'describe-regions':
+        elif args.action == 'describe-regions':
             self._cloud.describe_regions(disable_border=self._disable_border, disable_header=self._disable_header)
         else:
-            self.die('Action %s not implemented yet' % action)
+            self.die('Action %s not implemented yet' % args.action)
 
     def _display_version(self):
         print('%s version %s' % (self._name, self._version))
@@ -43,14 +43,14 @@ class Main(object):
     @staticmethod
     def die(message=None, code=1):
         if message is not None:
-            print(message, file=stderr)
+            print(message, file=sys.stderr)
         exit(code)
 
     def _parse_args(self):
-        parser = ArgumentParser(description='A tool to manipulate clouds.')
+        parser = argparse.ArgumentParser(description='A tool to manipulate clouds')
         parser.add_argument('-v', '--version',
                             help='show version', action='store_true', dest='version')
-        parser.add_argument('action', nargs='?', choices=['describe-instances', 'describe-regions'])
+        parser.add_argument('action', choices=['describe-instances', 'describe-regions'])
         parser.add_argument('-c', '--cloud-provider', help='cloud provider (default: %(default)s)',
                             dest='cloud_provider', choices=['aws', 'gce', 'azure'], default='aws')
         parser.add_argument('-p', '--profile-name', help='cloud profile name (default: %(default)s)',
@@ -67,20 +67,11 @@ class Main(object):
         if args.version:
             self._display_version()
             exit()
-        if not args.action:
-            parser.print_usage()
-            exit()
-        self._profile_name = args.profile_name
-        self._cloud_provider = args.cloud_provider
-        self._disable_border = args.disable_border
-        self._disable_header = args.disable_header
-        self._region = args.region
-        self._state = args.state
-        return args.action
+        return args
 
 
 class Cloud(object):
-    __metaclass__ = ABCMeta
+    __metaclass__ = abc.ABCMeta
 
     def __init__(self, cloud_provider, profile_name, region):
         self._cloud_provider = cloud_provider
@@ -92,11 +83,11 @@ class Cloud(object):
         classes = {'aws': AWS, 'azure': AZURE, 'gce': GCE}
         return classes[cloud_provider](cloud_provider, profile_name, region)
 
-    @abstractmethod
+    @abc.abstractmethod
     def describe_instances(self):
         pass
 
-    @abstractmethod
+    @abc.abstractmethod
     def describe_regions(self):
         pass
 
@@ -105,16 +96,23 @@ class AWS(Cloud):
     def __init__(self, *args, **kwargs):
         super(AWS, self).__init__(*args, **kwargs)
         self._session = None
+        ec2c = None
         try:
-            self._session = Session(profile_name=self._profile_name)
-        except exceptions.ProfileNotFound as err:
+            self._session = boto3.Session(profile_name=self._profile_name)
+        except botocore.exceptions.ProfileNotFound as err:
             Main.die(err.message)
-        ec2c = self._session.client('ec2')
+        try:
+            ec2c = self._session.client('ec2')
+        except botocore.exceptions.NoRegionError as err:
+            print(err.message)
+            exit(1)
         self._regions = []
         regions = None
         try:
             regions = ec2c.describe_regions()
-        except exceptions.EndpointConnectionError as err:
+        except botocore.exceptions.EndpointConnectionError as err:
+            Main.die(err.message)
+        except botocore.exceptions.ClientError as err:
             Main.die(err.message)
         for region in regions['Regions']:
             self._regions.append(region['RegionName'])
@@ -157,10 +155,10 @@ class AWS(Cloud):
     def describe_instances(self, disable_border=False, disable_header=False, state=None):
         if not state:
             state = ['running', 'pending', 'shutting-down', 'stopped', 'stopping', 'terminated']
-        table = PrettyTable(['Zone', 'VPC ID', 'ID', 'Name', 'Type', 'Image', 'State', 'Launch time', 'Uptime',
-                             'Last user', 'SSH key', 'Private IP', 'Public IP'],
-                            border=not disable_border, header=not disable_header, reversesort=True,
-                            sortby='Launch time')
+        table = prettytable.PrettyTable(['Zone', 'VPC ID', 'ID', 'Name', 'Type', 'Image', 'State', 'Launch time',
+                                         'Uptime', 'Last user', 'SSH key', 'Private IP', 'Public IP'],
+                                        border=not disable_border, header=not disable_header, reversesort=True,
+                                        sortby='Launch time')
         table.align = 'l'
         i = 0
         states = dict()
@@ -182,8 +180,8 @@ class AWS(Cloud):
                 uptime = ''
                 name = self._get_value(instance.tags, 'Name')
                 launch_time = str(instance.launch_time).partition('+')[0]
-                now = datetime.now()
-                then = datetime.strptime(launch_time, '%Y-%m-%d %H:%M:%S')
+                now = datetime.datetime.now()
+                then = datetime.datetime.strptime(launch_time, '%Y-%m-%d %H:%M:%S')
                 if instance_state == 'running':
                     uptime = self._date_diff(now, then)
                 try:
@@ -215,10 +213,11 @@ class AWS(Cloud):
             out = '(%s)' % out
         else:
             out = ''
-        print('Time: %s | Instances: %s %s' % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), i, out))
+        print('Time: %s | Instances: %s %s' % (datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), i, out))
 
     def describe_regions(self, disable_border=False, disable_header=False):
-        table = PrettyTable(['Region'], border=not disable_border, header=not disable_header, sortby='Region')
+        table = prettytable.PrettyTable(['Region'], border=not disable_border, header=not disable_header,
+                                        sortby='Region')
         table.align = 'l'
         for region in self._regions:
             table.add_row([region])
@@ -250,4 +249,7 @@ class GCE(Cloud):
 
 
 if __name__ == '__main__':
-    app = Main()
+    try:
+        main = Main()
+    except KeyboardInterrupt:
+        print('\nCancelling...')
