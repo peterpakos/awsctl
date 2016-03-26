@@ -10,7 +10,7 @@ import sys
 import abc
 import argparse
 import boto3
-import botocore
+import botocore.exceptions
 import prettytable
 import datetime
 
