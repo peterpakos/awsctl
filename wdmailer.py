@@ -60,7 +60,7 @@ class Mail(object):
 
     def __init__(self):
         self._cwd = os.path.dirname(os.path.abspath(sys.argv[0]))
-        self._api_file = self._cwd + '/' + __name__ + '.api'
+        self._api_file = self._cwd + '/wdmailer.api'
         self._api_user = None
         self._api_key = None
         if os.path.isfile(self._api_file):
