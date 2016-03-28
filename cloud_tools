@@ -13,27 +13,25 @@ import boto3
 import botocore.exceptions
 import prettytable
 import datetime
+import pytz
+import tzlocal
+import wdmailer
 
 
 class Main(object):
-    _version = '16.3.27'
+    _version = '16.3.29'
     _name = os.path.basename(sys.argv[0])
 
     def __init__(self):
         args = self._parse_args()
-        self._profile_name = args.profile_name
-        self._cloud_provider = args.cloud_provider
-        self._disable_border = args.disable_border
-        self._disable_header = args.disable_header
-        self._region = args.region
-        self._state = args.state
-        self._cloud = Cloud.loader(self._cloud_provider, self._profile_name, self._region)
+        self._cloud = Cloud.loader(args.cloud_provider, args.profile_name, args.region)
         if args.action == 'describe-instances':
-            self._cloud.describe_instances(disable_border=self._disable_border,
-                                           disable_header=self._disable_header,
-                                           state=self._state)
+            self._cloud.describe_instances(disable_border=args.disable_border,
+                                           disable_header=args.disable_header,
+                                           state=args.state,
+                                           notify=args.notify)
         elif args.action == 'describe-regions':
-            self._cloud.describe_regions(disable_border=self._disable_border, disable_header=self._disable_header)
+            self._cloud.describe_regions(disable_border=args.disable_border, disable_header=args.disable_header)
         else:
             self.die('Action %s not implemented yet' % args.action)
 
@@ -63,6 +61,8 @@ class Main(object):
         parser.add_argument('-s', '--state', help='display instances only in certain states', action='append',
                             choices=['running', 'pending', 'shutting-down', 'stopped', 'stopping', 'terminated'],
                             dest='state')
+        parser.add_argument('-n', '--notify', help='notify owners', action='store_true',
+                            dest='notify')
         args = parser.parse_args()
         if args.version:
             self._display_version()
@@ -77,6 +77,8 @@ class Cloud(object):
         self._cloud_provider = cloud_provider
         self._profile_name = profile_name
         self._region = region
+        self._mail = wdmailer.Mail()
+        self._warning_threshold = 3600 * 12
 
     @staticmethod
     def loader(cloud_provider, profile_name, region):
@@ -124,44 +126,108 @@ class AWS(Cloud):
                 self._regions = [self._region]
 
     @staticmethod
-    def _get_value(list_a, search_value):
-        name = ''
+    def _get_tag(list_a, search_key):
+        value = ''
         if type(list_a) == list:
             for item in list_a:
-                if item['Key'] == search_value:
-                    name = item['Value']
+                if item['Key'] == search_key:
+                    value = item['Value']
                     break
-        return name
+        return value
 
     @staticmethod
     def _date_diff(date1, date2):
         diff = (date1-date2)
         diff = (diff.microseconds + (diff.seconds + diff.days * 24 * 3600) * 10**6) / 10**6
-        d = divmod(diff, 86400)
+        return diff
+
+    @staticmethod
+    def _get_uptime(seconds):
+        d = divmod(seconds, 86400)
         h = divmod(d[1], 3600)
         m = divmod(h[1], 60)
         s = m[1]
-        diff = []
+        uptime = []
         if d[0] > 0:
-            diff.append('%dd' % d[0])
+            uptime.append('%dd' % d[0])
         if h[0] > 0:
-            diff.append('%dh' % h[0])
+            uptime.append('%dh' % h[0])
         if m[0] > 0:
-            diff.append('%dm' % m[0])
-        diff.append('%ds' % s)
-        diff = ' '.join(diff)
-        return diff
+            uptime.append('%dm' % m[0])
+        uptime.append('%ds' % s)
+        uptime = ' '.join(uptime)
+        return uptime
 
-    def describe_instances(self, disable_border=False, disable_header=False, state=None):
+    @staticmethod
+    def _get_dept(vpc_name):
+        dept = ''
+        if vpc_name.startswith('DEV'):
+            dept = 'Development'
+        if vpc_name.startswith('QA'):
+            dept = 'QA'
+        if vpc_name.startswith('SALES'):
+            dept = 'Sales'
+        if vpc_name.startswith('SUPPORT'):
+            dept = 'Support'
+        return dept
+
+    def _send_alert(self, email_type, user, number):
+        s = ''
+        have = 'has'
+        if number > 1:
+            s = 's'
+            have = 'have'
+        sender = 'Infrastructure & IT <infra@wandisco.com>'
+        recipient = user + '@wandisco.com'
+        if email_type == 'notification':
+            subject = 'EC2 running instances'
+            message = '''Hi %s,
+
+This is just a friendly reminder that you have %s running EC2 instance%s.
+
+Make sure any running instances are either STOPPED or TERMINATED before close of business.
+
+Please note, any instances running for more than %s hours will be reported to the respective head of department.
+
+Thank you.
+
+--
+Infrastructure & IT Team
+''' % (user.split('.')[0].capitalize(), number, s, self._warning_threshold/3600)
+        elif email_type == 'warning':
+            subject = 'WARNING: EC2 running instances'
+            message = '''Hi %s,
+
+You currently have %s EC2 instance%s that %s been running for more than %s hours.
+
+Please STOP or TERMINATE any instances that are no longer in use.
+
+Thank you.
+
+--
+Infrastructure & IT Team
+''' % (user.split('.')[0].capitalize(), number, s, have, self._warning_threshold/3600)
+        else:
+            print('Unknown email type: %s' % email_type)
+            return
+        print('Sending %s email to %s... ' % (email_type, recipient), end='')
+        status, msg = self._mail.send(sender, recipient, subject, message)
+        print(msg['message'])
+
+    def describe_instances(self, disable_border=False, disable_header=False, state=None, notify=False):
         if not state:
             state = ['running', 'pending', 'shutting-down', 'stopped', 'stopping', 'terminated']
-        table = prettytable.PrettyTable(['Zone', 'VPC ID', 'ID', 'Name', 'Type', 'Image', 'State', 'Launch time',
-                                         'Uptime', 'Last user', 'SSH key', 'Private IP', 'Public IP'],
+        table = prettytable.PrettyTable(['Zone', 'VPC ID', 'VPC Dept', 'ID', 'Name', 'Type', 'Image', 'State',
+                                         'Launch time', 'Uptime', 'Last user', 'SSH key', 'Private IP', 'Public IP'],
                                         border=not disable_border, header=not disable_header, reversesort=True,
                                         sortby='Launch time')
         table.align = 'l'
         i = 0
         states = dict()
+        notify_list = dict()
+        warning_list = dict()
+        local_tz = tzlocal.get_localzone()
+        now = local_tz.localize(datetime.datetime.now())
         for region in self._regions:
             ec2r = self._session.resource('ec2', region_name=region)
             instances = ec2r.instances.filter(Filters=[{
@@ -170,20 +236,33 @@ class AWS(Cloud):
             }])
             for instance in instances:
                 i += 1
+                vpc_id = ''
+                dept = ''
                 if instance.vpc_id is not None:
                     vpc_id = instance.vpc_id
-                else:
-                    vpc_id = ''
+                    vpc = ec2r.Vpc(vpc_id)
+                    dept = self._get_dept(self._get_tag(vpc.tags, 'Name'))
                 image_name = ''
                 instance_state = instance.state['Name']
-                last_user = self._get_value(instance.tags, 'Last_user')
+                last_user = self._get_tag(instance.tags, 'Last_user')
                 uptime = ''
-                name = self._get_value(instance.tags, 'Name')
-                launch_time = str(instance.launch_time).partition('+')[0]
-                now = datetime.datetime.now()
-                then = datetime.datetime.strptime(launch_time, '%Y-%m-%d %H:%M:%S')
+                name = self._get_tag(instance.tags, 'Name')
+                then = instance.launch_time.astimezone(pytz.timezone(str(local_tz)))
+                launch_time = str(then).partition('+')[0]
                 if instance_state == 'running':
-                    uptime = self._date_diff(now, then)
+                    seconds = self._date_diff(now, then)
+                    uptime = self._get_uptime(seconds)
+                    if last_user:
+                        if notify and seconds < self._warning_threshold:
+                            if last_user in notify_list:
+                                notify_list[last_user] += 1
+                            else:
+                                notify_list[last_user] = 1
+                        if notify and seconds >= self._warning_threshold:
+                            if last_user in warning_list:
+                                warning_list[last_user] += 1
+                            else:
+                                warning_list[last_user] = 1
                 try:
                     image_name = instance.image.name[0:20]
                 except AttributeError:
@@ -191,6 +270,7 @@ class AWS(Cloud):
                 table.add_row([
                     instance.placement['AvailabilityZone'],
                     vpc_id,
+                    dept,
                     instance.id,
                     name,
                     instance.instance_type,
@@ -213,7 +293,16 @@ class AWS(Cloud):
             out = '(%s)' % out
         else:
             out = ''
-        print('Time: %s | Instances: %s %s' % (datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), i, out))
+        print('Time: %s (%s) | Instances: %s %s' % (now.strftime('%Y-%m-%d %H:%M:%S'), str(local_tz), i, out))
+        for user in warning_list:
+            if user in notify_list:
+                notify_list.pop(user)
+        if len(warning_list) > 0 or len(notify_list) > 0:
+            print()
+        for user in notify_list:
+            self._send_alert('notification', user, notify_list[user])
+        for user in warning_list:
+            self._send_alert('warning', user, warning_list[user])
 
     def describe_regions(self, disable_border=False, disable_header=False):
         table = prettytable.PrettyTable(['Region'], border=not disable_border, header=not disable_header,
