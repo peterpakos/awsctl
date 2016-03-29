@@ -48,7 +48,7 @@ class Main(object):
         parser = argparse.ArgumentParser(description='A tool to manipulate clouds')
         parser.add_argument('-v', '--version',
                             help='show version', action='store_true', dest='version')
-        parser.add_argument('action', choices=['describe-instances', 'describe-regions'])
+        parser.add_argument('action', choices=['describe-instances', 'describe-regions'], nargs='?')
         parser.add_argument('-c', '--cloud-provider', help='cloud provider (default: %(default)s)',
                             dest='cloud_provider', choices=['aws', 'gce', 'azure'], default='aws')
         parser.add_argument('-p', '--profile-name', help='cloud profile name (default: %(default)s)',
@@ -61,11 +61,14 @@ class Main(object):
         parser.add_argument('-s', '--state', help='display instances only in certain states', action='append',
                             choices=['running', 'pending', 'shutting-down', 'stopped', 'stopping', 'terminated'],
                             dest='state')
-        parser.add_argument('-n', '--notify', help='notify owners', action='store_true',
+        parser.add_argument('-n', '--notify', help='send notification and warning emails', action='store_true',
                             dest='notify')
         args = parser.parse_args()
         if args.version:
             self._display_version()
+            exit()
+        if not args.action:
+            parser.print_usage()
             exit()
         return args
 
