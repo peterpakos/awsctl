@@ -19,7 +19,7 @@ import wdmailer
 
 
 class Main(object):
-    _version = '16.3.29'
+    _version = '16.3.30'
     _name = os.path.basename(sys.argv[0])
 
     def __init__(self):
@@ -130,7 +130,7 @@ class AWS(Cloud):
 
     @staticmethod
     def _get_tag(list_a, search_key):
-        value = ''
+        value = None
         if type(list_a) == list:
             for item in list_a:
                 if item['Key'] == search_key:
@@ -163,15 +163,18 @@ class AWS(Cloud):
 
     @staticmethod
     def _get_dept(vpc_name):
-        dept = ''
+        if vpc_name is None:
+            return ''
         if vpc_name.startswith('DEV'):
             dept = 'Development'
-        if vpc_name.startswith('QA'):
+        elif vpc_name.startswith('QA'):
             dept = 'QA'
-        if vpc_name.startswith('SALES'):
+        elif vpc_name.startswith('SALES'):
             dept = 'Sales'
-        if vpc_name.startswith('SUPPORT'):
+        elif vpc_name.startswith('SUPPORT'):
             dept = 'Support'
+        else:
+            dept = ''
         return dept
 
     def _send_alert(self, email_type, user, number):
@@ -220,8 +223,9 @@ Infrastructure & IT Team
     def describe_instances(self, disable_border=False, disable_header=False, state=None, notify=False):
         if not state:
             state = ['running', 'pending', 'shutting-down', 'stopped', 'stopping', 'terminated']
-        table = prettytable.PrettyTable(['Zone', 'VPC ID', 'VPC Dept', 'ID', 'Name', 'Type', 'Image', 'State',
-                                         'Launch time', 'Uptime', 'Last user', 'SSH key', 'Private IP', 'Public IP'],
+        table = prettytable.PrettyTable(['Zone', 'VPC Dept', 'ID', 'Name', 'Type', 'Image', 'State',
+                                         'Launch time', 'Uptime', 'Last user', 'SSH key', 'Private IP', 'Public IP',
+                                         'Exclude'],
                                         border=not disable_border, header=not disable_header, reversesort=True,
                                         sortby='Launch time')
         table.align = 'l'
@@ -239,29 +243,32 @@ Infrastructure & IT Team
             }])
             for instance in instances:
                 i += 1
-                vpc_id = ''
+                #vpc_id = ''
                 dept = ''
+                excluded = False
                 if instance.vpc_id is not None:
                     vpc_id = instance.vpc_id
                     vpc = ec2r.Vpc(vpc_id)
                     dept = self._get_dept(self._get_tag(vpc.tags, 'Name'))
                 image_name = ''
                 instance_state = instance.state['Name']
-                last_user = self._get_tag(instance.tags, 'Last_user')
+                last_user = self._get_tag(instance.tags, 'Last_user') or ''
                 uptime = ''
                 name = self._get_tag(instance.tags, 'Name')
                 then = instance.launch_time.astimezone(pytz.timezone(str(local_tz)))
                 launch_time = str(then).partition('+')[0]
                 if instance_state == 'running':
+                    if self._get_tag(instance.tags, 'EXCLUDE') is not None:
+                        excluded = True
                     seconds = self._date_diff(now, then)
                     uptime = self._get_uptime(seconds)
                     if last_user:
-                        if notify and seconds < self._warning_threshold:
+                        if notify and not excluded and seconds < self._warning_threshold:
                             if last_user in notify_list:
                                 notify_list[last_user] += 1
                             else:
                                 notify_list[last_user] = 1
-                        if notify and seconds >= self._warning_threshold:
+                        if notify and not excluded and seconds >= self._warning_threshold:
                             if last_user in warning_list:
                                 warning_list[last_user] += 1
                             else:
@@ -272,7 +279,6 @@ Infrastructure & IT Team
                     pass
                 table.add_row([
                     instance.placement['AvailabilityZone'],
-                    vpc_id,
                     dept,
                     instance.id,
                     name,
@@ -284,7 +290,8 @@ Infrastructure & IT Team
                     last_user,
                     instance.key_name,
                     instance.private_ip_address,
-                    instance.public_ip_address
+                    instance.public_ip_address,
+                    excluded
                 ])
                 if instance.state['Name'] in states:
                     states[instance.state['Name']] += 1
