@@ -10,8 +10,8 @@ AWS Access Key ID [****************BLUQ]:
 AWS Secret Access Key [****************0ECi]:
 Default region name [eu-west-1]:
 Default output format [json]:
-
 ```
+
 ### Manual setup
 The tool reads AWS config and credentials from a local file named `config` and `credentials` in a folder named `.aws` in your home directory. Home directory location varies but can be referred to using the environment variables `%UserProfile%` in Windows and `$HOME` or `~` (tilde) in Unix-like systems.
 
@@ -37,27 +37,24 @@ The tool uses Python module Boto 3 to talk to AWS ([Boto 3 documentation](http:/
 ## Usage
 ```
 $ ./cloud_tools -h
-usage: cloud_tools [-h] [-v] [-c {aws,gce,azure}] [-p PROFILE_NAME] [-b] [-H]
+usage: cloud_tools [-h] [--version] [-c {aws,gce,azure}] [-p PROFILE_NAME]
                    [-r REGION]
-                   [-s {running,pending,shutting-down,stopped,stopping,terminated}]
-                   [{describe-instances,describe-regions}]
+                   {describe-instances,describe-regions} ...
 
-A tool to manipulate clouds.
-
-positional arguments:
-  {describe-instances,describe-regions}
+A tool to manipulate clouds
 
 optional arguments:
   -h, --help            show this help message and exit
-  -v, --version         show version
+  --version             show program's version number and exit
   -c {aws,gce,azure}, --cloud-provider {aws,gce,azure}
                         cloud provider (default: aws)
   -p PROFILE_NAME, --profile-name PROFILE_NAME
                         cloud profile name (default: default)
-  -b, --disable-border  disable table border
-  -H, --disable-header  disable table header
   -r REGION, --region REGION
                         choose single region (default: all)
-  -s {running,pending,shutting-down,stopped,stopping,terminated}, --state {running,pending,shutting-down,stopped,stopping,terminated}
-                        display instances only in certain states
+
+commands:
+  {describe-instances,describe-regions}
+    describe-instances  display list of instances
+    describe-regions    display list of available regions
 ```

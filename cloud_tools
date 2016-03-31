@@ -19,21 +19,21 @@ import wdmailer
 
 
 class Main(object):
-    _version = '16.3.30'
+    _version = '16.3.31'
     _name = os.path.basename(sys.argv[0])
 
     def __init__(self):
         args = self._parse_args()
         self._cloud = Cloud.loader(args.cloud_provider, args.profile_name, args.region)
-        if args.action == 'describe-instances':
+        if args.command == 'describe-instances':
             self._cloud.describe_instances(disable_border=args.disable_border,
                                            disable_header=args.disable_header,
                                            state=args.state,
                                            notify=args.notify)
-        elif args.action == 'describe-regions':
+        elif args.command == 'describe-regions':
             self._cloud.describe_regions(disable_border=args.disable_border, disable_header=args.disable_header)
         else:
-            self.die('Action %s not implemented yet' % args.action)
+            self.die('Command %s not implemented yet' % args.command)
 
     def _display_version(self):
         print('%s version %s' % (self._name, self._version))
@@ -46,31 +46,34 @@ class Main(object):
 
     def _parse_args(self):
         parser = argparse.ArgumentParser(description='A tool to manipulate clouds')
-        parser.add_argument('-v', '--version',
-                            help='show version', action='store_true', dest='version')
-        parser.add_argument('action', choices=['describe-instances', 'describe-regions'], nargs='?')
+
+        parser.add_argument('--version', action='version', version='%s %s' % (self._name, self._version))
         parser.add_argument('-c', '--cloud-provider', help='cloud provider (default: %(default)s)',
                             dest='cloud_provider', choices=['aws', 'gce', 'azure'], default='aws')
         parser.add_argument('-p', '--profile-name', help='cloud profile name (default: %(default)s)',
                             dest='profile_name', default='default')
-        parser.add_argument('-b', '--disable-border', help='disable table border', action='store_true',
-                            dest='disable_border')
-        parser.add_argument('-H', '--disable-header', help='disable table header', action='store_true',
-                            dest='disable_header')
         parser.add_argument('-r', '--region', help='choose single region (default: all)', dest='region')
-        parser.add_argument('-s', '--state', help='display instances only in certain states', action='append',
-                            choices=['running', 'pending', 'shutting-down', 'stopped', 'stopping', 'terminated'],
-                            dest='state')
-        parser.add_argument('-n', '--notify', help='send notification and warning emails', action='store_true',
-                            dest='notify')
-        args = parser.parse_args()
-        if args.version:
-            self._display_version()
-            exit()
-        if not args.action:
-            parser.print_usage()
-            exit()
-        return args
+
+        subparsers = parser.add_subparsers(title='commands', dest='command')
+        parser_describe_instances = subparsers.add_parser('describe-instances', help='display list of instances')
+        parser_describe_instances.add_argument('-b', '--disable-border', help='disable table border',
+                                               action='store_true', dest='disable_border')
+        parser_describe_instances.add_argument('-H', '--disable-header', help='disable table header',
+                                               action='store_true', dest='disable_header')
+        parser_describe_instances.add_argument('-s', '--state', help='display instances only in certain states',
+                                               action='append', dest='state',
+                                               choices=['running', 'pending', 'shutting-down', 'stopped', 'stopping',
+                                                        'terminated'])
+        parser_describe_instances.add_argument('-n', '--notify', help='send notification and warning emails',
+                                               action='store_true', dest='notify')
+
+        parser_describe_regions = subparsers.add_parser('describe-regions', help='display list of available regions')
+        parser_describe_regions.add_argument('-b', '--disable-border', help='disable table border',
+                                             action='store_true', dest='disable_border')
+        parser_describe_regions.add_argument('-H', '--disable-header', help='disable table header',
+                                             action='store_true', dest='disable_header')
+
+        return parser.parse_args()
 
 
 class Cloud(object):
@@ -166,13 +169,13 @@ class AWS(Cloud):
         if vpc_name is None:
             return ''
         if vpc_name.startswith('DEV'):
-            dept = 'Development'
+            dept = 'DEV'
         elif vpc_name.startswith('QA'):
             dept = 'QA'
         elif vpc_name.startswith('SALES'):
-            dept = 'Sales'
+            dept = 'SALE'
         elif vpc_name.startswith('SUPPORT'):
-            dept = 'Support'
+            dept = 'SUPP'
         else:
             dept = ''
         return dept
@@ -223,7 +226,7 @@ Infrastructure & IT Team
     def describe_instances(self, disable_border=False, disable_header=False, state=None, notify=False):
         if not state:
             state = ['running', 'pending', 'shutting-down', 'stopped', 'stopping', 'terminated']
-        table = prettytable.PrettyTable(['Zone', 'VPC Dept', 'ID', 'Name', 'Type', 'Image', 'State',
+        table = prettytable.PrettyTable(['Zone', 'Dept', 'ID', 'Name', 'Type', 'Image', 'State',
                                          'Launch time', 'Uptime', 'Last user', 'SSH key', 'Private IP', 'Public IP',
                                          'Exclude'],
                                         border=not disable_border, header=not disable_header, reversesort=True,
@@ -243,7 +246,6 @@ Infrastructure & IT Team
             }])
             for instance in instances:
                 i += 1
-                #vpc_id = ''
                 dept = ''
                 excluded = False
                 if instance.vpc_id is not None:
@@ -274,7 +276,7 @@ Infrastructure & IT Team
                             else:
                                 warning_list[last_user] = 1
                 try:
-                    image_name = instance.image.name[0:20]
+                    image_name = instance.image.name[0:15]
                 except AttributeError:
                     pass
                 table.add_row([
