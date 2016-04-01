@@ -19,7 +19,7 @@ import wdmailer
 
 
 class Main(object):
-    _version = '16.3.31'
+    _version = '16.4.3'
     _name = os.path.basename(sys.argv[0])
 
     def __init__(self):
@@ -34,6 +34,9 @@ class Main(object):
             self._cloud.describe_regions(disable_border=args.disable_border, disable_header=args.disable_header)
         else:
             self.die('Command %s not implemented yet' % args.command)
+
+    def run(self):
+        pass
 
     def _display_version(self):
         print('%s version %s' % (self._name, self._version))
@@ -352,5 +355,6 @@ class GCE(Cloud):
 if __name__ == '__main__':
     try:
         main = Main()
+        main.run()
     except KeyboardInterrupt:
         print('\nCancelling...')
