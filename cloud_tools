@@ -23,20 +23,20 @@ class Main(object):
     _name = os.path.basename(sys.argv[0])
 
     def __init__(self):
-        args = self._parse_args()
-        self._cloud = Cloud.loader(args.cloud_provider, args.profile_name, args.region)
-        if args.command == 'describe-instances':
-            self._cloud.describe_instances(disable_border=args.disable_border,
-                                           disable_header=args.disable_header,
-                                           state=args.state,
-                                           notify=args.notify)
-        elif args.command == 'describe-regions':
-            self._cloud.describe_regions(disable_border=args.disable_border, disable_header=args.disable_header)
-        else:
-            self.die('Command %s not implemented yet' % args.command)
+        self._args = self._parse_args()
+        self._cloud = Cloud.loader(self._args.cloud_provider, self._args.profile_name, self._args.region)
 
     def run(self):
-        pass
+        if self._args.command == 'describe-instances':
+            self._cloud.describe_instances(disable_border=self._args.disable_border,
+                                           disable_header=self._args.disable_header,
+                                           state=self._args.state,
+                                           notify=self._args.notify)
+        elif self._args.command == 'describe-regions':
+            self._cloud.describe_regions(disable_border=self._args.disable_border,
+                                         disable_header=self._args.disable_header)
+        else:
+            self.die('Command %s not implemented yet' % self._args.command)
 
     def _display_version(self):
         print('%s version %s' % (self._name, self._version))
