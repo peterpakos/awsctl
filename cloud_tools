@@ -76,6 +76,9 @@ class Main(object):
         parser_describe_regions.add_argument('-H', '--disable-header', help='disable table header',
                                              action='store_true', dest='disable_header')
 
+        parser_exclude = subparsers.add_parser('exclude', help='exclude instances from alerting')
+        parser_exclude.add_argument('-i', '--id', help='instance id', action='append', dest='id')
+
         return parser.parse_args()
 
 
