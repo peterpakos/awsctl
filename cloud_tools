@@ -19,7 +19,7 @@ import wdmailer
 
 
 class Main(object):
-    _version = '16.4.3'
+    _version = '16.4.4'
     _name = os.path.basename(sys.argv[0])
 
     def __init__(self):
@@ -35,6 +35,19 @@ class Main(object):
         elif self._args.command == 'describe-regions':
             self._cloud.describe_regions(disable_border=self._args.disable_border,
                                          disable_header=self._args.disable_header)
+        elif self._args.command == 'exclude':
+            self._cloud.tag(instance_id=self._args.id,
+                            key='EXCLUDE',
+                            value='True')
+        elif self._args.command == 'include':
+            self._cloud.tag(instance_id=self._args.id,
+                            key='EXCLUDE',
+                            delete=True)
+        elif self._args.command == 'tag':
+            self._cloud.tag(instance_id=self._args.id,
+                            key=self._args.key,
+                            value=self._args.value,
+                            delete=self._args.delete)
         else:
             self.die('Command %s not implemented yet' % self._args.command)
 
@@ -76,8 +89,17 @@ class Main(object):
         parser_describe_regions.add_argument('-H', '--disable-header', help='disable table header',
                                              action='store_true', dest='disable_header')
 
-        parser_exclude = subparsers.add_parser('exclude', help='exclude instances from alerting')
-        parser_exclude.add_argument('-i', '--id', help='instance id', action='append', dest='id')
+        parser_exclude = subparsers.add_parser('exclude', help='exclude instances from alerting (create EXCLUDE tag)')
+        parser_exclude.add_argument('-i', '--id', help='instance id', action='append', dest='id', required=True)
+
+        parser_include = subparsers.add_parser('include', help='include instances in alerting (delete EXCLUDE tag)')
+        parser_include.add_argument('-i', '--id', help='instance id', action='append', dest='id', required=True)
+
+        parser_tag = subparsers.add_parser('tag', help='tag instance')
+        parser_tag.add_argument('-i', '--id', help='instance id', action='append', dest='id', required=True)
+        parser_tag.add_argument('-k', '--key', help='tag\'s key', dest='key', required=True)
+        parser_tag.add_argument('-v', '--value', help='tag\'s value', dest='value', default='')
+        parser_tag.add_argument('-d', '--delete', help='delete tag', dest='delete', action='store_true', default=False)
 
         return parser.parse_args()
 
@@ -254,6 +276,8 @@ Infrastructure & IT Team
                 i += 1
                 dept = ''
                 excluded = False
+                if self._get_tag(instance.tags, 'EXCLUDE') is not None:
+                    excluded = True
                 if instance.vpc_id is not None:
                     vpc_id = instance.vpc_id
                     vpc = ec2r.Vpc(vpc_id)
@@ -266,8 +290,6 @@ Infrastructure & IT Team
                 then = instance.launch_time.astimezone(pytz.timezone(str(local_tz)))
                 launch_time = str(then).partition('+')[0]
                 if instance_state == 'running':
-                    if self._get_tag(instance.tags, 'EXCLUDE') is not None:
-                        excluded = True
                     seconds = self._date_diff(now, then)
                     uptime = self._get_uptime(seconds)
                     if last_user:
@@ -329,6 +351,53 @@ Infrastructure & IT Team
         for region in self._regions:
             table.add_row([region])
         print(table)
+
+    def _create_tag(self, region, resource, key, value):
+        ec2c = self._session.client('ec2', region_name=region)
+        ec2c.create_tags(Resources=[resource], Tags=[{
+            'Key': key,
+            'Value': value
+        }])
+        return True
+
+    def _delete_tag(self, region, resource, key):
+        ec2c = self._session.client('ec2', region_name=region)
+        ec2c.delete_tags(Resources=[resource], Tags=[{
+            'Key': key
+        }])
+        return True
+
+    def tag(self, instance_id, key, value='', delete=False):
+        i = 0
+        for region in self._regions:
+            ec2r = self._session.resource('ec2', region_name=region)
+            instances = ec2r.instances.filter(Filters=[{
+                'Name': 'instance-state-name',
+                'Values': ['running', 'pending', 'shutting-down', 'stopped', 'stopping', 'terminated']
+            }])
+            for instance in instances:
+                if instance.id in instance_id:
+                    i += 1
+                    if delete:
+                        print('Instance ID %s found in region %s, deleting tag \'%s\': ' % (instance.id, region, key),
+                              end='')
+                        response = self._delete_tag(region=region, resource=instance.id, key=key)
+                    else:
+                        print('Instance ID %s found in region %s, creating tag \'%s\': ' % (instance.id, region, key),
+                              end='')
+                        response = self._create_tag(region=region, resource=instance.id, key=key, value=value)
+                    if response:
+                        print('OK')
+                    else:
+                        print('FAIL')
+                    if len(instance_id) == i:
+                        return
+        if i == 0:
+            if self._region:
+                region = 'region ' + self._region
+            else:
+                region = 'any region'
+            print('Instance ID %s not found in %s' % (', '.join(instance_id), region))
 
 
 class AZURE(Cloud):
