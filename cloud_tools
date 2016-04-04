@@ -95,7 +95,7 @@ class Main(object):
         parser_include = subparsers.add_parser('include', help='include instances in alerting (delete EXCLUDE tag)')
         parser_include.add_argument('-i', '--id', help='instance id', action='append', dest='id', required=True)
 
-        parser_tag = subparsers.add_parser('tag', help='tag instance')
+        parser_tag = subparsers.add_parser('tag', help='tag instances')
         parser_tag.add_argument('-i', '--id', help='instance id', action='append', dest='id', required=True)
         parser_tag.add_argument('-k', '--key', help='tag\'s key', dest='key', required=True)
         parser_tag.add_argument('-v', '--value', help='tag\'s value', dest='value', default='')
