@@ -97,8 +97,8 @@ class Main(object):
 
         parser_tag = subparsers.add_parser('tag', help='tag instances')
         parser_tag.add_argument('-i', '--id', help='instance id', action='append', dest='id', required=True)
-        parser_tag.add_argument('-k', '--key', help='tag\'s key', dest='key', required=True)
-        parser_tag.add_argument('-v', '--value', help='tag\'s value', dest='value', default='')
+        parser_tag.add_argument('-k', '--key', help='key', dest='key', required=True)
+        parser_tag.add_argument('-v', '--value', help='value', dest='value', default='')
         parser_tag.add_argument('-d', '--delete', help='delete tag', dest='delete', action='store_true', default=False)
 
         return parser.parse_args()
