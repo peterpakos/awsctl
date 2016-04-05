@@ -1,0 +1,47 @@
+#!/usr/bin/env python
+
+import boto3
+import botocore.exceptions
+
+session = boto3.Session(profile_name='infra')
+ec2c = session.client('ec2')
+
+regions = []
+for region in ec2c.describe_regions()['Regions']:
+            regions.append(region['RegionName'])
+
+for region in regions:
+    ec2 = session.resource('ec2', region_name=region)
+    security_groups = ec2.security_groups.all()
+    for sg in security_groups:
+        print(sg.id)
+        try:
+            print('tcp')
+            sg.authorize_ingress(
+                IpProtocol='tcp',
+                FromPort=0,
+                ToPort=65535,
+                CidrIp='86.188.242.194/32'
+            )
+        except botocore.exceptions.ClientError as err:
+            print(err)
+        try:
+            print('udp')
+            sg.authorize_ingress(
+                IpProtocol='udp',
+                FromPort=0,
+                ToPort=65535,
+                CidrIp='86.188.242.194/32'
+            )
+        except botocore.exceptions.ClientError as err:
+            print(err)
+        try:
+            print('icmp')
+            sg.authorize_ingress(
+                IpProtocol='icmp',
+                FromPort=-1,
+                ToPort=-1,
+                CidrIp='86.188.242.194/32'
+            )
+        except botocore.exceptions.ClientError as err:
+            print(err)
