@@ -257,9 +257,8 @@ Thank you.
 
         message += '\n-- \nInfrastructure & IT Team'
         print('Sending %s email to %s... ' % (email_type, recipient), end='')
-        #status, msg = self._mail.send(sender, recipient, subject, message, html=True)
-        #print(msg['message'])
-        print(message)
+        status, msg = self._mail.send(sender, recipient, subject, message, html=True)
+        print(msg['message'])
 
     def describe_instances(self, disable_border=False, disable_header=False, state=None, notify=False):
         if not state:
