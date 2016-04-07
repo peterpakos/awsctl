@@ -208,7 +208,17 @@ class AWS(Cloud):
             dept = ''
         return dept
 
-    def _send_alert(self, email_type, user, number):
+    def _send_alert(self, user, region_ids, warning=False):
+        number = 0
+        table = prettytable.PrettyTable(['Zone', 'Instance ID'])
+        table.align = 'l'
+        for region, ids in region_ids.items():
+            number += len(ids)
+            for iid in ids:
+                table.add_row([
+                    region,
+                    iid
+                ])
         s = ''
         have = 'has'
         if number > 1:
@@ -216,40 +226,40 @@ class AWS(Cloud):
             have = 'have'
         sender = 'Infrastructure & IT <infra@wandisco.com>'
         recipient = user + '@wandisco.com'
-        if email_type == 'notification':
+        if not warning:
+            email_type = 'notification'
             subject = 'EC2 running instances'
             message = '''Hi %s,
 
-This is just a friendly reminder that you have %s running EC2 instance%s.
+This is just a friendly reminder that you have %s running EC2 instance%s:
+
+%s
 
 Make sure any running instances are either STOPPED or TERMINATED before close of business.
 
 Please note, any instances running for more than %s hours will be reported to the respective head of department.
 
 Thank you.
-
---
-Infrastructure & IT Team
-''' % (user.split('.')[0].capitalize(), number, s, self._warning_threshold/3600)
-        elif email_type == 'warning':
+''' % (user.split('.')[0].capitalize(), number, s, table, self._warning_threshold/3600)
+        else:
+            email_type = 'warning'
             subject = 'WARNING: EC2 running instances'
             message = '''Hi %s,
 
-You currently have %s EC2 instance%s that %s been running for more than %s hours.
+You currently have %s EC2 instance%s that %s been running for more than %s hours:
+
+%s
 
 Please STOP or TERMINATE any instances that are no longer in use.
 
 Thank you.
+''' % (user.split('.')[0].capitalize(), number, s, have, self._warning_threshold/3600, table)
 
---
-Infrastructure & IT Team
-''' % (user.split('.')[0].capitalize(), number, s, have, self._warning_threshold/3600)
-        else:
-            print('Unknown email type: %s' % email_type)
-            return
+        message += '\n-- \nInfrastructure & IT Team'
         print('Sending %s email to %s... ' % (email_type, recipient), end='')
-        status, msg = self._mail.send(sender, recipient, subject, message)
-        print(msg['message'])
+        #status, msg = self._mail.send(sender, recipient, subject, message, html=True)
+        #print(msg['message'])
+        print(message)
 
     def describe_instances(self, disable_border=False, disable_header=False, state=None, notify=False):
         if not state:
@@ -261,11 +271,11 @@ Infrastructure & IT Team
                                         sortby='Launch time')
         table.align = 'l'
         i = 0
-        states = dict()
-        notify_list = dict()
-        warning_list = dict()
+        states = {}
+        notify_list = {}
         local_tz = tzlocal.get_localzone()
         now = local_tz.localize(datetime.datetime.now())
+        warning_list = {}
         for region in self._regions:
             ec2r = self._session.resource('ec2', region_name=region)
             instances = ec2r.instances.filter(Filters=[{
@@ -292,17 +302,20 @@ Infrastructure & IT Team
                 if instance_state == 'running':
                     seconds = self._date_diff(now, then)
                     uptime = self._get_uptime(seconds)
-                    if last_user:
-                        if notify and not excluded and seconds < self._warning_threshold:
-                            if last_user in notify_list:
-                                notify_list[last_user] += 1
+                    if last_user and notify and not excluded:
+                        if last_user in notify_list:
+                            if region in notify_list[last_user]:
+                                notify_list[last_user][region].append(instance.id)
                             else:
-                                notify_list[last_user] = 1
-                        if notify and not excluded and seconds >= self._warning_threshold:
-                            if last_user in warning_list:
-                                warning_list[last_user] += 1
-                            else:
-                                warning_list[last_user] = 1
+                                notify_list[last_user][region] = []
+                                notify_list[last_user][region].append(instance.id)
+                        else:
+                            notify_list[last_user] = {}
+                            notify_list[last_user][region] = []
+                            notify_list[last_user][region].append(instance.id)
+
+                        if seconds >= self._warning_threshold:
+                            warning_list[last_user] = True
                 try:
                     image_name = instance.image.name[0:15]
                 except AttributeError:
@@ -334,15 +347,14 @@ Infrastructure & IT Team
         else:
             out = ''
         print('Time: %s (%s) | Instances: %s %s' % (now.strftime('%Y-%m-%d %H:%M:%S'), str(local_tz), i, out))
-        for user in warning_list:
-            if user in notify_list:
-                notify_list.pop(user)
-        if len(warning_list) > 0 or len(notify_list) > 0:
+        if len(notify_list) > 0:
             print()
-        for user in notify_list:
-            self._send_alert('notification', user, notify_list[user])
-        for user in warning_list:
-            self._send_alert('warning', user, warning_list[user])
+        for user, region_ids in notify_list.items():
+            if user in warning_list:
+                warning = True
+            else:
+                warning = False
+            self._send_alert(user, region_ids, warning)
 
     def describe_regions(self, disable_border=False, disable_header=False):
         table = prettytable.PrettyTable(['Region'], border=not disable_border, header=not disable_header,
