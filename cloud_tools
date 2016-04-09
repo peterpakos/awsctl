@@ -263,7 +263,7 @@ Thank you.
     def describe_instances(self, disable_border=False, disable_header=False, state=None, notify=False):
         if not state:
             state = ['running', 'pending', 'shutting-down', 'stopped', 'stopping', 'terminated']
-        table = prettytable.PrettyTable(['Zone', 'Dept', 'ID', 'Name', 'Type', 'Image', 'State',
+        table = prettytable.PrettyTable(['Zone', 'ID', 'Name', 'Type', 'Image', 'State',
                                          'Launch time', 'Uptime', 'Last user', 'SSH key', 'Private IP', 'Public IP',
                                          'Exclude'],
                                         border=not disable_border, header=not disable_header, reversesort=True,
@@ -283,19 +283,21 @@ Thank you.
             }])
             for instance in instances:
                 i += 1
-                dept = ''
+                # dept = ''
                 excluded = False
                 if self._get_tag(instance.tags, 'EXCLUDE') is not None:
                     excluded = True
-                if instance.vpc_id is not None:
-                    vpc_id = instance.vpc_id
-                    vpc = ec2r.Vpc(vpc_id)
-                    dept = self._get_dept(self._get_tag(vpc.tags, 'Name'))
+                # if instance.vpc_id is not None:
+                    # vpc_id = instance.vpc_id
+                    # vpc = ec2r.Vpc(vpc_id)
+                    # dept = self._get_dept(self._get_tag(vpc.tags, 'Name'))
                 image_name = ''
                 instance_state = instance.state['Name']
                 last_user = self._get_tag(instance.tags, 'Last_user') or ''
                 uptime = ''
                 name = self._get_tag(instance.tags, 'Name')
+                if name is None:
+                    name = ''
                 then = instance.launch_time.astimezone(pytz.timezone(str(local_tz)))
                 launch_time = str(then).partition('+')[0]
                 if instance_state == 'running':
@@ -321,7 +323,7 @@ Thank you.
                     pass
                 table.add_row([
                     instance.placement['AvailabilityZone'],
-                    dept,
+                    # dept,
                     instance.id,
                     name,
                     instance.instance_type,
