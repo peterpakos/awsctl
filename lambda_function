@@ -1,42 +1,88 @@
 #!/usr/bin/env python
+#
+# Lambda function to tag EC2 instances
+# Version 16.4.11
+#
+# Author: Peter Pakos <peter.pakos@wandisco.com>
 
 from __future__ import print_function
-from json import loads
-from gzip import open
-from botocore import exceptions
-from boto3 import client
-from os import path
-from urllib import unquote_plus
-
-s3 = client('s3')
+import json
+import gzip
+import botocore.exceptions
+import boto3
+import os
+import sys
+import urllib
 
 
 def lambda_handler(event, context):
-    #print("Received event: " + dumps(event, indent=2))
+    # print("Received event: " + json.dumps(event, indent=2))
 
-    bucket = event['Records'][0]['s3']['bucket']['name']
-    key = unquote_plus(event['Records'][0]['s3']['object']['key']).decode('utf8')
-    tmp_file = '/tmp/' + path.basename(key)
+    bucket = None
+    key = None
+    session = None
+    if __name__ == '__main__':
+        if len(sys.argv) == 3:
+            profile = sys.argv[1]
+            bucket = 'wandisco-%s-auto-tag' % profile
+            key = sys.argv[2]
+            try:
+                session = boto3.Session(profile_name=profile)
+            except botocore.exceptions.ProfileNotFound as err:
+                print(err)
+                exit(1)
+        else:
+            print('usage: %s AWS_PROFILE EVENT_PATH' % (sys.argv[0]))
+            exit(1)
+    else:
+        session = boto3.Session()
+        bucket = event['Records'][0]['s3']['bucket']['name']
+        key = urllib.unquote_plus(event['Records'][0]['s3']['object']['key']).decode('utf8')
 
+    s3 = session.client('s3')
+    print('Loading events from %s...' % key)
+    tmp_file = '/tmp/' + os.path.basename(key)
     try:
         s3.download_file(bucket, key, tmp_file)
     except Exception as err:
         print(err)
         exit(1)
 
-    with open(tmp_file, 'rb') as f:
+    with gzip.open(tmp_file) as f:
         file_content = f.read()
 
-    events = loads(file_content)['Records']
-
+    events = json.loads(file_content)['Records']
+    asg_uid = {}
     for event in events:
         instance_ids = []
         response = None
-        if event['eventName'] == 'CreateAutoScalingGroup':
+
+        if event['eventName'] == 'RunJobFlow':
+            print('Processing event %s...' % event['eventName'])
+            region = event['awsRegion']
+            user = event['userIdentity']['userName']
+            cluster_id = event['responseElements']['jobFlowId']
+            emr = session.client('emr', region_name=region)
+            instances = emr.list_instances(ClusterId=cluster_id)['Instances']
+            for instance in instances:
+                instance_ids.append(instance['Ec2InstanceId'])
+            ec2 = session.client('ec2', region_name=region)
+            try:
+                print('Tagging in progress... Last_user: %s, Instances: %s' % (user, ', '.join(instance_ids)))
+                response = ec2.create_tags(Resources=instance_ids, Tags=[{'Key': 'Last_user', 'Value': user}])
+            except botocore.exceptions.ClientError as err:
+                print(err)
+                continue
+            print('HTTP response: %s' % response['ResponseMetadata']['HTTPStatusCode'])
+
+        elif event['eventName'] in ['CreateAutoScalingGroup', 'UpdateAutoScalingGroup']:
+            print('Processing event %s...' % event['eventName'])
             user = event['userIdentity']['userName']
             as_group = event['requestParameters']['autoScalingGroupName']
             region = event['awsRegion']
-            autoscaling = client('autoscaling', region_name=region)
+            autoscaling = session.client('autoscaling', region_name=region)
+            if as_group not in asg_uid:
+                asg_uid[as_group] = user
             try:
                 print('Tagging in progress... Last_user: %s, autoScalingGroupName: %s' % (user, as_group))
                 response = autoscaling.create_or_update_tags(Tags=[{
@@ -46,26 +92,28 @@ def lambda_handler(event, context):
                     'Value': user,
                     'PropagateAtLaunch': True
                 }])
-            except exceptions.ClientError as err:
+            except botocore.exceptions.ClientError as err:
                 print(err)
             print('HTTP response: %s' % response['ResponseMetadata']['HTTPStatusCode'])
             response = autoscaling.describe_auto_scaling_groups(AutoScalingGroupNames=[as_group])
             for instance in response['AutoScalingGroups'][0]['Instances']:
                 instance_ids.append(instance['InstanceId'])
-            ec2 = client('ec2', region_name=region)
+            ec2 = session.client('ec2', region_name=region)
             try:
                 print('Tagging in progress... Last_user: %s, Instances: %s' % (user, ', '.join(instance_ids)))
                 response = ec2.create_tags(Resources=instance_ids, Tags=[{'Key': 'Last_user', 'Value': user}])
-            except exceptions.ClientError as err:
+            except botocore.exceptions.ClientError as err:
                 print(err)
             print('HTTP response: %s' % response['ResponseMetadata']['HTTPStatusCode'])
+
         elif event['eventName'] in ['RunInstances', 'StartInstances', 'StopInstances']:
+            print('Processing event %s...' % event['eventName'])
             region = event['awsRegion']
-            if event['userAgent'] == 'autoscaling.amazonaws.com':
-                print('Instance created by AutoScalingGroup, skipping.')
+            if event['userAgent'] in ['autoscaling.amazonaws.com', 'elasticmapreduce.amazonaws.com']:
+                print('Instance created by %s, skipping...' % event['userAgent'])
                 continue
             user = event['userIdentity']['userName']
-            ec2 = client('ec2', region_name=region)
+            ec2 = session.client('ec2', region_name=region)
             try:
                 for item in event['responseElements']['instancesSet']['items']:
                     instance_ids.append(item['instanceId'])
@@ -75,7 +123,41 @@ def lambda_handler(event, context):
             try:
                 print('Tagging in progress... Last_user: %s, Instances: %s' % (user, ', '.join(instance_ids)))
                 response = ec2.create_tags(Resources=instance_ids, Tags=[{'Key': 'Last_user', 'Value': user}])
-            except exceptions.ClientError as err:
+            except botocore.exceptions.ClientError as err:
                 print(err)
                 continue
             print('HTTP response: %s' % response['ResponseMetadata']['HTTPStatusCode'])
+
+        elif event['eventName'] == 'CreateTags' and event['userAgent'] == 'autoscaling.amazonaws.com':
+            print('Processing event %s (%s)...' % (event['eventName'], event['userAgent']))
+            region = event['awsRegion']
+            user = None
+            ec2 = session.client('ec2', region_name=region)
+            for item in event['requestParameters']['tagSet']['items']:
+                if item['key'] == 'aws:autoscaling:groupName' and item['value'] in asg_uid:
+                    user = asg_uid[item['value']]
+                    continue
+            if not user:
+                print('Unable to find user, skipping...')
+                continue
+            try:
+                for item in event['requestParameters']['resourcesSet']['items']:
+                    instance_ids.append(item['resourceId'])
+            except TypeError as err:
+                print(err)
+                continue
+            try:
+                print('Tagging in progress... Last_user: %s, Instances: %s' % (user, ', '.join(instance_ids)))
+                response = ec2.create_tags(Resources=instance_ids, Tags=[{'Key': 'Last_user', 'Value': user}])
+            except botocore.exceptions.ClientError as err:
+                print(err)
+                continue
+            print('HTTP response: %s' % response['ResponseMetadata']['HTTPStatusCode'])
+            print(region, instance_ids)
+
+        else:
+            print('Skipping event %s...' % event['eventName'])
+
+
+if __name__ == '__main__':
+    lambda_handler('', '')
