@@ -19,7 +19,7 @@ import wdmailer
 
 
 class Main(object):
-    _version = '16.4.4'
+    _version = '16.4.11'
     _name = os.path.basename(sys.argv[0])
 
     def __init__(self):
