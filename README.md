@@ -36,7 +36,7 @@ The tool uses Python module Boto 3 to talk to AWS ([Boto 3 documentation](http:/
 
 ## Usage
 
-```
+~~~
 $ ./cloud_tools -h
 usage: cloud_tools [-h] [--version] [-c {aws,gce,azure}] [-p PROFILE_NAME]
                    [-r REGION]
@@ -62,4 +62,60 @@ commands:
     exclude             exclude instances from alerting (create EXCLUDE tag)
     include             include instances in alerting (delete EXCLUDE tag)
     tag                 tag instances
-```
+~~~
+
+## AWS Lambda function
+The included lambda funcion automatically adds `Last_user` tag to EC2 instances.
+
+### Code
+Either edit code inline or upload a .zip file.
+
+### Configuration
+Runtime: Python2.7
+Handler: lambda_function.lambda_handler
+Role: LambdaAutoTagRole
+Description: Auto tag resources
+Memory (MB): 128
+Timeout: 0 min 30 sec
+VPC: No VPC
+
+### Event sources
+Event source type: S3
+Bucket: bucket-name
+Event type: Object Created (All)
+
+### LambdaAutoTagRole Policy:
+~~~
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+            ],
+            "Resource": "arn:aws:logs:*:*:*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "s3:*",
+                "ec2:*",
+                "autoscaling:*",
+                "elasticmapreduce:*"
+            ],
+            "Resource": [
+                "*"
+            ]
+        }
+    ]
+}
+~~~
+
+### AWS CloudTrail
+Trail name: auto-tag
+Apply trail to all regions: Yes
+Create a new S3 bucket: Yes
+S3 bucket: bucket-name
