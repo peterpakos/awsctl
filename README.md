@@ -71,18 +71,18 @@ The included lambda funcion automatically adds `Last_user` tag to EC2 instances.
 Either edit code inline or upload a .zip file.
 
 ### Configuration
-Runtime: Python2.7
-Handler: lambda_function.lambda_handler
-Role: LambdaAutoTagRole
-Description: Auto tag resources
-Memory (MB): 128
-Timeout: 0 min 30 sec
-VPC: No VPC
+    Runtime: Python2.7
+    Handler: lambda_function.lambda_handler
+    Role: LambdaAutoTagRole
+    Description: Auto tag resources
+    Memory (MB): 128
+    Timeout: 0 min 30 sec
+    VPC: No VPC
 
 ### Event sources
-Event source type: S3
-Bucket: bucket-name
-Event type: Object Created (All)
+    Event source type: S3
+    Bucket: bucket-name
+    Event type: Object Created (All)
 
 ### LambdaAutoTagRole Policy:
 ~~~
@@ -115,7 +115,9 @@ Event type: Object Created (All)
 ~~~
 
 ### AWS CloudTrail
-Trail name: auto-tag
-Apply trail to all regions: Yes
-Create a new S3 bucket: Yes
-S3 bucket: bucket-name
+Record AWS API calls into S3 bucket.
+
+    Trail name: auto-tag
+    Apply trail to all regions: Yes
+    Create a new S3 bucket: Yes
+    S3 bucket: bucket-name
