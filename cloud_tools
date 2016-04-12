@@ -19,7 +19,7 @@ import wdmailer
 
 
 class Main(object):
-    _version = '16.4.11'
+    _version = '16.4.13'
     _name = os.path.basename(sys.argv[0])
 
     def __init__(self):
@@ -136,20 +136,20 @@ class AWS(Cloud):
         try:
             self._session = boto3.Session(profile_name=self._profile_name)
         except botocore.exceptions.ProfileNotFound as err:
-            Main.die(err.message)
+            Main.die(err)
         try:
             ec2c = self._session.client('ec2')
         except botocore.exceptions.NoRegionError as err:
-            print(err.message)
+            print(err)
             exit(1)
         self._regions = []
         regions = None
         try:
             regions = ec2c.describe_regions()
         except botocore.exceptions.EndpointConnectionError as err:
-            Main.die(err.message)
+            Main.die(err)
         except botocore.exceptions.ClientError as err:
-            Main.die(err.message)
+            Main.die(err)
         for region in regions['Regions']:
             self._regions.append(region['RegionName'])
         if self._region:
