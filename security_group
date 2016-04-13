@@ -8,8 +8,8 @@ from __future__ import print_function
 import boto3
 import botocore.exceptions
 
-PROFILE_NAME = 'wandisco'
-CIDR = '86.188.242.194/32'
+PROFILE_NAME = 'default'
+CIDR = '81.23.60.158/32'
 
 
 def main():
@@ -23,8 +23,13 @@ def main():
     for region in regions:
         ec2 = session.resource('ec2', region_name=region)
         security_groups = ec2.security_groups.all()
+        num = 0
         for sg in security_groups:
-            print('\nSECURITY GROUP:', sg.id)
+            num += 1
+        i = 0
+        for sg in security_groups:
+            i += 1
+            print('\nSECURITY GROUP: %s (Region %s: %s/%s)' % (sg.id, region, i, num))
             try:
                 print('ALL TRAFFIC: ', end='')
                 sg.authorize_ingress(
