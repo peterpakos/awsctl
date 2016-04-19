@@ -14,7 +14,7 @@ import json
 
 
 class Main(object):
-    _version = '16.3.27'
+    _version = '16.4.27'
     _name = os.path.basename(sys.argv[0])
 
     def __init__(self):
@@ -27,7 +27,7 @@ class Main(object):
         for line in sys.stdin:
             message += line
         mail = Mail()
-        status, msg = mail.send(sender, args.recipient, args.subject, message, args.html)
+        status, msg = mail.send(sender, args.recipient, args.subject, message, args.html, args.cc)
         if status == 200:
             exit()
         else:
@@ -36,24 +36,22 @@ class Main(object):
 
     def _parse_args(self):
         parser = argparse.ArgumentParser(description='A tool to send mail via sendgrid')
-        parser.add_argument('-v', '--version',
-                            help='show version', action='store_true', dest='version')
+        parser.add_argument('--version', action='version', version='%s %s' % (self._name, self._version))
         parser.add_argument('-f', '--from', dest='sender',
                             help='email From: field')
         parser.add_argument('-t', '--to', dest='recipient', nargs='+', required=True,
                             help='email To: field')
+        parser.add_argument('-c', '--cc', dest='cc', nargs='+',
+                            help='email Cc: field')
         parser.add_argument('-s', '--subject', dest='subject', required=True,
                             help='email Subject: field')
         parser.add_argument('-H', '--html', dest='html', action='store_true',
                             help='send HTML formatted email')
         args = parser.parse_args()
-        if args.version:
-            self._display_version()
-            exit()
         return args
 
     def _display_version(self):
-        print('%s version %s' % (self._name, self._version))
+        print('%s %s' % (self._name, self._version))
 
 
 class Mail(object):
@@ -72,7 +70,7 @@ class Mail(object):
             exit(1)
         self._sg = sendgrid.SendGridClient(self._api_user, self._api_key)
 
-    def send(self, sender, recipient, subject, message, html=False):
+    def send(self, sender, recipient, subject, message, html=False, cc=None):
         mail = sendgrid.Mail()
         body = ''
         if html:
@@ -92,6 +90,8 @@ class Mail(object):
         mail.set_from(sender)
         mail.add_to(recipient)
         mail.set_subject(subject)
+        if cc:
+            mail.add_cc(cc)
         if html:
             mail.set_html(body)
         else:
