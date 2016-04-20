@@ -19,7 +19,7 @@ import wdmailer
 
 
 class Main(object):
-    _version = '16.4.13'
+    _version = '16.4.27'
     _name = os.path.basename(sys.argv[0])
 
     def __init__(self):
@@ -113,6 +113,16 @@ class Cloud(object):
         self._region = region
         self._mail = wdmailer.Mail()
         self._warning_threshold = 3600 * 12
+        self._heads = {
+            'dev': ['yuri.yudin@wandisco.com', 'rob.budas@wandisco.com'],
+            'qa': ['andrew.heawood@wandisco.com', 'rob.budas@wandisco.com'],
+            'sales': 'scott.rudenstein@wandisco.com',
+            'support': 'mark.kelly@wandisco.com'
+        }
+        if profile_name in self._heads:
+            self._head = self._heads[profile_name]
+        else:
+            self._head = None
 
     @staticmethod
     def loader(cloud_provider, profile_name, region):
@@ -192,22 +202,6 @@ class AWS(Cloud):
         uptime = ' '.join(uptime)
         return uptime
 
-    @staticmethod
-    def _get_dept(vpc_name):
-        if vpc_name is None:
-            return ''
-        if vpc_name.startswith('DEV'):
-            dept = 'DEV'
-        elif vpc_name.startswith('QA'):
-            dept = 'QA'
-        elif vpc_name.startswith('SALES'):
-            dept = 'SALE'
-        elif vpc_name.startswith('SUPPORT'):
-            dept = 'SUPP'
-        else:
-            dept = ''
-        return dept
-
     def _send_alert(self, user, region_ids, warning=False):
         number = 0
         table = prettytable.PrettyTable(['Zone', 'Instance ID'])
@@ -226,6 +220,7 @@ class AWS(Cloud):
             have = 'have'
         sender = 'Infrastructure & IT <infra@wandisco.com>'
         recipient = user + '@wandisco.com'
+        cc_recipient = None
         if not warning:
             email_type = 'notification'
             subject = 'EC2 running instances'
@@ -242,6 +237,7 @@ Please note, any instances running for more than %s hours will be reported to th
 Thank you.
 ''' % (user.split('.')[0].capitalize(), number, s, table, self._warning_threshold/3600)
         else:
+            cc_recipient = self._head
             email_type = 'warning'
             subject = 'WARNING: EC2 running instances'
             message = '''Hi %s,
@@ -256,8 +252,14 @@ Thank you.
 ''' % (user.split('.')[0].capitalize(), number, s, have, self._warning_threshold/3600, table)
 
         message += '\n-- \nInfrastructure & IT Team'
-        print('Sending %s email to %s... ' % (email_type, recipient), end='')
-        status, msg = self._mail.send(sender, recipient, subject, message, html=True)
+        cc = ''
+        if cc_recipient:
+            if type(cc_recipient) is list:
+                cc = ' (cc: %s)' % ', '.join(cc_recipient)
+            else:
+                cc = ' (cc: %s)' % cc_recipient
+        print('Sending %s email to %s%s... ' % (email_type, recipient, cc), end='')
+        status, msg = self._mail.send(sender, recipient, subject, message, html=True, cc=cc_recipient)
         print(msg['message'])
 
     def describe_instances(self, disable_border=False, disable_header=False, state=None, notify=False):
@@ -283,14 +285,9 @@ Thank you.
             }])
             for instance in instances:
                 i += 1
-                # dept = ''
                 excluded = False
                 if self._get_tag(instance.tags, 'EXCLUDE') is not None:
                     excluded = True
-                # if instance.vpc_id is not None:
-                    # vpc_id = instance.vpc_id
-                    # vpc = ec2r.Vpc(vpc_id)
-                    # dept = self._get_dept(self._get_tag(vpc.tags, 'Name'))
                 image_name = ''
                 instance_state = instance.state['Name']
                 last_user = self._get_tag(instance.tags, 'Last_user') or ''
@@ -323,7 +320,6 @@ Thank you.
                     pass
                 table.add_row([
                     instance.placement['AvailabilityZone'],
-                    # dept,
                     instance.id,
                     name,
                     instance.instance_type,
