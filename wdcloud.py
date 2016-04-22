@@ -25,7 +25,7 @@ class Cloud(object):
         self._mail = wdmailer.Mail()
         self._warning_threshold = 3600 * 12
         self._heads = {
-            'dev': ['yuri.yudin@wandisco.com', 'rob.budas@wandisco.com'],
+            'dev': ['peter@pakos.pl', 'piotr@pakos.pl'],
             'qa': ['andrew.heawood@wandisco.com', 'rob.budas@wandisco.com'],
             'sales': 'scott.rudenstein@wandisco.com',
             'support': 'mark.kelly@wandisco.com'
@@ -147,10 +147,23 @@ This is just a friendly reminder that you have %s running EC2 instance%s:
 
 Make sure any running instances are either STOPPED or TERMINATED before close of business.
 
+If you wish to keep your instances running for more than %s hours, please raise a ticket using \
+<a href="http://helpdesk.wandisco.com">IT Helpdesk</a> so we can exclude them from reporting.
+
+For more information check our \
+<a href="https://workspace.wandisco.com/display/IT/AWS+Best+Practices+at+WANdisco">AWS Best Practices</a>.
+
 Please note, any instances running for more than %s hours will be reported to the respective head of department.
 
 Thank you.
-''' % (user.split('.')[0].capitalize(), number, s, table, self._warning_threshold/3600)
+''' % (
+                user.split('.')[0].capitalize(),
+                number,
+                s,
+                table,
+                self._warning_threshold/3600,
+                self._warning_threshold/3600
+            )
         else:
             cc_recipient = self._head
             email_type = 'warning'
@@ -163,8 +176,22 @@ You currently have %s EC2 instance%s that %s been running for more than %s hours
 
 Please STOP or TERMINATE any instances that are no longer in use.
 
+If you wish to keep your instances running for more than %s hours, please raise a ticket using \
+<a href="http://helpdesk.wandisco.com">IT Helpdesk</a> so we can exclude them from reporting.
+
+For more information check our \
+<a href="https://workspace.wandisco.com/display/IT/AWS+Best+Practices+at+WANdisco">AWS Best Practices</a>.
+
 Thank you.
-''' % (user.split('.')[0].capitalize(), number, s, have, self._warning_threshold/3600, table)
+''' % (
+                user.split('.')[0].capitalize(),
+                number,
+                s,
+                have,
+                self._warning_threshold/3600,
+                table,
+                self._warning_threshold/3600
+            )
 
         message += '\n-- \nInfrastructure & IT Team'
         cc = ''
