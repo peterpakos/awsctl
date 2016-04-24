@@ -1,6 +1,6 @@
 # WANdisco Cloud module
 #
-# Version 16.4.28
+# Version 16.4.29
 #
 # Author: Peter Pakos <peter.pakos@wandisco.com>
 
@@ -25,10 +25,10 @@ class Cloud(object):
         self._mail = wdmailer.Mail()
         self._warning_threshold = 3600 * 12
         self._heads = {
-            'dev': ['peter@pakos.pl', 'piotr@pakos.pl'],
+            'dev': ['yuri.yudin@wandisco.com', 'rob.budas@wandisco.com'],
             'qa': ['andrew.heawood@wandisco.com', 'rob.budas@wandisco.com'],
-            'sales': 'scott.rudenstein@wandisco.com',
-            'support': 'mark.kelly@wandisco.com'
+            'sales': ['scott.rudenstein@wandisco.com', 'rob.budas@wandisco.com'],
+            'support': ['mark.kelly@wandisco.com', 'rob.budas@wandisco.com']
         }
         if profile_name in self._heads:
             self._head = self._heads[profile_name]
