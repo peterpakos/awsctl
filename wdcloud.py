@@ -26,7 +26,7 @@ class Cloud(object):
         self._warning_threshold = 3600 * 12
         self._heads = {
             'dev': ['yuri.yudin@wandisco.com', 'rob.budas@wandisco.com'],
-            'qa': ['andrew.heawood@wandisco.com', 'rob.budas@wandisco.com'],
+            'qa': ['andrew.heawood@wandisco.com', 'rob.budas@wandisco.com', 'virginia.wang@wandisco.com'],
             'sales': ['scott.rudenstein@wandisco.com', 'rob.budas@wandisco.com'],
             'support': ['mark.kelly@wandisco.com', 'rob.budas@wandisco.com']
         }
