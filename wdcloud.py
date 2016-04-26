@@ -117,16 +117,17 @@ class AWS(Cloud):
         uptime = ' '.join(uptime)
         return uptime
 
-    def _send_alert(self, user, region_ids, warning=False):
+    def _send_alert(self, user, region_ids, uptime_list, warning=False):
         number = 0
-        table = prettytable.PrettyTable(['Zone', 'Instance ID'])
+        table = prettytable.PrettyTable(['Zone', 'Instance ID', 'Uptime'])
         table.align = 'l'
         for region, ids in region_ids.items():
             number += len(ids)
             for iid in ids:
                 table.add_row([
                     region,
-                    iid
+                    iid,
+                    uptime_list[iid]
                 ])
         s = ''
         have = 'has'
@@ -216,6 +217,7 @@ Thank you.
         i = 0
         states = {}
         notify_list = {}
+        uptime_list = {}
         local_tz = tzlocal.get_localzone()
         now = local_tz.localize(datetime.datetime.now())
         warning_list = {}
@@ -243,6 +245,7 @@ Thank you.
                     seconds = self._date_diff(now, then)
                     uptime = self._get_uptime(seconds)
                     if last_user and notify and not excluded:
+                        uptime_list[instance.id] = uptime
                         if last_user in notify_list:
                             if region in notify_list[last_user]:
                                 notify_list[last_user][region].append(instance.id)
@@ -293,7 +296,7 @@ Thank you.
                 warning = True
             else:
                 warning = False
-            self._send_alert(user, region_ids, warning)
+            self._send_alert(user, region_ids, uptime_list, warning)
 
     def describe_regions(self, disable_border=False, disable_header=False):
         table = prettytable.PrettyTable(['Region'], border=not disable_border, header=not disable_header,
