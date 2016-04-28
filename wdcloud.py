@@ -139,10 +139,10 @@ class AWS(Cloud):
         cc_recipient = None
         if not warning:
             email_type = 'notification'
-            subject = 'EC2 running instances'
+            subject = 'AWS %s: EC2 running instances' % str(self._profile_name).upper()
             message = '''Hi %s,
 
-This is just a friendly reminder that you have %s running EC2 instance%s:
+This is just a friendly reminder that you have %s running EC2 instance%s in AWS %s account:
 
 %s
 
@@ -161,6 +161,7 @@ Thank you.
                 user.split('.')[0].capitalize(),
                 number,
                 s,
+                str(self._profile_name).upper(),
                 table,
                 self._warning_threshold/3600,
                 self._warning_threshold/3600
@@ -168,10 +169,10 @@ Thank you.
         else:
             cc_recipient = self._head
             email_type = 'warning'
-            subject = 'WARNING: EC2 running instances'
+            subject = '*WARNING* AWS %s: EC2 running instances' % str(self._profile_name).upper()
             message = '''Hi %s,
 
-You currently have %s EC2 instance%s that %s been running for more than %s hours:
+You currently have %s EC2 instance%s in AWS %s account that %s been running for more than %s hours:
 
 %s
 
@@ -188,6 +189,7 @@ Thank you.
                 user.split('.')[0].capitalize(),
                 number,
                 s,
+                str(self._profile_name).upper(),
                 have,
                 self._warning_threshold/3600,
                 table,
