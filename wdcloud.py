@@ -24,6 +24,7 @@ class Cloud(object):
         self._region = region
         self._mail = wdmailer.Mail()
         self._warning_threshold = 3600 * 12
+        self._stop_threshold = 3600 * 24 * 3
         self._heads = {
             'dev': ['yuri.yudin@wandisco.com', 'rob.budas@wandisco.com'],
             'qa': ['andrew.heawood@wandisco.com', 'rob.budas@wandisco.com', 'virginia.wang@wandisco.com'],
@@ -220,6 +221,7 @@ Thank you.
         states = {}
         notify_list = {}
         uptime_list = {}
+        stop_list = {}
         local_tz = tzlocal.get_localzone()
         now = local_tz.localize(datetime.datetime.now())
         warning_list = {}
@@ -235,6 +237,8 @@ Thank you.
                 if self._get_tag(instance.tags, 'EXCLUDE') is not None:
                     excluded = True
                 image_name = ''
+                private_ip_address = instance.private_ip_address if instance.private_ip_address is not None else ''
+                public_ip_address = instance.public_ip_address if instance.public_ip_address is not None else ''
                 instance_state = instance.state['Name']
                 last_user = self._get_tag(instance.tags, 'Last_user') or ''
                 uptime = ''
@@ -246,6 +250,12 @@ Thank you.
                 if instance_state == 'running':
                     seconds = self._date_diff(now, then)
                     uptime = self._get_uptime(seconds)
+                    if seconds >= 3600 and not excluded:
+                        if region in stop_list:
+                            stop_list[region].append(instance.id)
+                        else:
+                            stop_list[region] = []
+                            stop_list[region].append(instance.id)
                     if last_user and notify and not excluded:
                         uptime_list[instance.id] = uptime
                         if last_user in notify_list:
@@ -276,8 +286,8 @@ Thank you.
                     uptime,
                     last_user,
                     instance.key_name,
-                    instance.private_ip_address,
-                    instance.public_ip_address,
+                    private_ip_address,
+                    public_ip_address,
                     excluded
                 ])
                 if instance.state['Name'] in states:
