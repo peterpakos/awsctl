@@ -24,7 +24,7 @@ class Cloud(object):
         self._region = region
         self._mail = wdmailer.Mail()
         self._warning_threshold = 3600 * 12
-        self._stop_threshold = 3600 * 24 * 3
+        self._stop_threshold = 3600 * 1 * 5
         self._heads = {
             'dev': ['yuri.yudin@wandisco.com', 'rob.budas@wandisco.com'],
             'qa': ['andrew.heawood@wandisco.com', 'rob.budas@wandisco.com', 'virginia.wang@wandisco.com'],
@@ -118,7 +118,7 @@ class AWS(Cloud):
         uptime = ' '.join(uptime)
         return uptime
 
-    def _send_alert(self, user, region_ids, uptime_list, warning=False):
+    def _send_alert(self, user, region_ids, uptime_dict, warning=False):
         number = 0
         table = prettytable.PrettyTable(['Zone', 'Instance ID', 'Uptime'])
         table.align = 'l'
@@ -128,7 +128,7 @@ class AWS(Cloud):
                 table.add_row([
                     region,
                     iid,
-                    uptime_list[iid]
+                    uptime_dict[iid]
                 ])
         s = ''
         have = 'has'
@@ -208,7 +208,7 @@ Thank you.
         status, msg = self._mail.send(sender, recipient, subject, message, html=True, cc=cc_recipient)
         print(msg['message'])
 
-    def describe_instances(self, disable_border=False, disable_header=False, state=None, notify=False):
+    def describe_instances(self, disable_border=False, disable_header=False, state=None, notify=False, stop=False):
         if not state:
             state = ['running', 'pending', 'shutting-down', 'stopped', 'stopping', 'terminated']
         table = prettytable.PrettyTable(['Zone', 'ID', 'Name', 'Type', 'Image', 'State',
@@ -218,13 +218,14 @@ Thank you.
                                         sortby='Launch time')
         table.align = 'l'
         i = 0
-        states = {}
-        notify_list = {}
-        uptime_list = {}
-        stop_list = {}
+        states_dict = {}
+        notify_dict = {}
+        uptime_dict = {}
+        stop_dict = {}
+        to_be_stopped_dict = {}
         local_tz = tzlocal.get_localzone()
         now = local_tz.localize(datetime.datetime.now())
-        warning_list = {}
+        warning_dict = {}
         for region in self._regions:
             ec2r = self._session.resource('ec2', region_name=region)
             instances = ec2r.instances.filter(Filters=[{
@@ -233,9 +234,7 @@ Thank you.
             }])
             for instance in instances:
                 i += 1
-                excluded = False
-                if self._get_tag(instance.tags, 'EXCLUDE') is not None:
-                    excluded = True
+                excluded = True if self._get_tag(instance.tags, 'EXCLUDE') is not None else False
                 image_name = ''
                 private_ip_address = instance.private_ip_address if instance.private_ip_address is not None else ''
                 public_ip_address = instance.public_ip_address if instance.public_ip_address is not None else ''
@@ -250,27 +249,33 @@ Thank you.
                 if instance_state == 'running':
                     seconds = self._date_diff(now, then)
                     uptime = self._get_uptime(seconds)
-                    if seconds >= 3600 and not excluded:
-                        if region in stop_list:
-                            stop_list[region].append(instance.id)
-                        else:
-                            stop_list[region] = []
-                            stop_list[region].append(instance.id)
-                    if last_user and notify and not excluded:
-                        uptime_list[instance.id] = uptime
-                        if last_user in notify_list:
-                            if region in notify_list[last_user]:
-                                notify_list[last_user][region].append(instance.id)
+                    if seconds >= self._stop_threshold and not excluded:
+                        if last_user in to_be_stopped_dict:
+                            if region in to_be_stopped_dict[last_user]:
+                                to_be_stopped_dict[last_user][region].append(instance.id)
                             else:
-                                notify_list[last_user][region] = []
-                                notify_list[last_user][region].append(instance.id)
+                                to_be_stopped_dict[last_user][region] = []
+                                to_be_stopped_dict[last_user][region].append(instance.id)
                         else:
-                            notify_list[last_user] = {}
-                            notify_list[last_user][region] = []
-                            notify_list[last_user][region].append(instance.id)
-
+                            to_be_stopped_dict[last_user] = {}
+                            to_be_stopped_dict[last_user][region] = []
+                            to_be_stopped_dict[last_user][region].append(instance.id)
+                    if last_user and notify and not excluded:
+                        uptime_dict[instance.id] = uptime
+                        if last_user in notify_dict:
+                            if region in notify_dict[last_user]:
+                                notify_dict[last_user][region].append(instance.id)
+                            else:
+                                notify_dict[last_user][region] = []
+                                notify_dict[last_user][region].append(instance.id)
+                        else:
+                            notify_dict[last_user] = {}
+                            notify_dict[last_user][region] = []
+                            notify_dict[last_user][region].append(instance.id)
                         if seconds >= self._warning_threshold:
-                            warning_list[last_user] = True
+                            warning_dict[last_user] = True
+                        elif seconds >= self._stop_threshold:
+                            stop_dict[last_user] = True
                 try:
                     image_name = instance.image.name[0:15]
                 except AttributeError:
@@ -290,25 +295,27 @@ Thank you.
                     public_ip_address,
                     excluded
                 ])
-                if instance.state['Name'] in states:
-                    states[instance.state['Name']] += 1
+                if instance.state['Name'] in states_dict:
+                    states_dict[instance.state['Name']] += 1
                 else:
-                    states[instance.state['Name']] = 1
+                    states_dict[instance.state['Name']] = 1
         print(table)
-        out = ', '.join(['%s: %s' % (key, value) for (key, value) in sorted(states.items())])
+        out = ', '.join(['%s: %s' % (key, value) for (key, value) in sorted(states_dict.items())])
         if len(out) > 0:
             out = '(%s)' % out
         else:
             out = ''
         print('Time: %s (%s) | Instances: %s %s' % (now.strftime('%Y-%m-%d %H:%M:%S'), str(local_tz), i, out))
-        if len(notify_list) > 0:
+        if len(notify_dict) > 0:
             print()
-        for user, region_ids in notify_list.items():
-            if user in warning_list:
+        for user, region_ids in notify_dict.items():
+            if user in warning_dict:
                 warning = True
             else:
                 warning = False
-            self._send_alert(user, region_ids, uptime_list, warning)
+            self._send_alert(user, region_ids, uptime_dict, warning)
+        if stop:
+            print(to_be_stopped_dict)
 
     def describe_regions(self, disable_border=False, disable_header=False):
         table = prettytable.PrettyTable(['Region'], border=not disable_border, header=not disable_header,
