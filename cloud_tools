@@ -24,7 +24,8 @@ class Main(object):
             self._cloud.describe_instances(disable_border=self._args.disable_border,
                                            disable_header=self._args.disable_header,
                                            state=self._args.state,
-                                           notify=self._args.notify)
+                                           notify=self._args.notify,
+                                           stop=self._args.stop)
         elif self._args.command == 'describe-regions':
             self._cloud.describe_regions(disable_border=self._args.disable_border,
                                          disable_header=self._args.disable_header)
@@ -75,6 +76,8 @@ class Main(object):
                                                         'terminated'])
         parser_describe_instances.add_argument('-n', '--notify', help='send notification and warning emails',
                                                action='store_true', dest='notify')
+        parser_describe_instances.add_argument('-S', '--stop', help='stop instances running longer than set threshold',
+                                               action='store_true', dest='stop')
 
         parser_describe_regions = subparsers.add_parser('describe-regions', help='display list of available regions')
         parser_describe_regions.add_argument('-b', '--disable-border', help='disable table border',
