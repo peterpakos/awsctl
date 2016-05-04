@@ -12,11 +12,12 @@ import wdcloud
 
 
 class Main(object):
-    _version = '16.5.2'
+    _version = '16.5.12'
     _name = os.path.basename(sys.argv[0])
 
     def __init__(self):
         self._args = self._parse_args()
+        print(self._args)
         self._cloud = wdcloud.Cloud.loader(self._args.cloud_provider, self._args.profile_name, self._args.region)
 
     def run(self):
@@ -25,7 +26,9 @@ class Main(object):
                                            disable_header=self._args.disable_header,
                                            state=self._args.state,
                                            notify=self._args.notify,
-                                           stop=self._args.stop)
+                                           stop=self._args.stop,
+                                           warning_threshold=self._args.warning_threshold,
+                                           stop_threshold=self._args.stop_threshold)
         elif self._args.command == 'describe-regions':
             self._cloud.describe_regions(disable_border=self._args.disable_border,
                                          disable_header=self._args.disable_header)
@@ -76,8 +79,14 @@ class Main(object):
                                                         'terminated'])
         parser_describe_instances.add_argument('-n', '--notify', help='send notification and warning emails',
                                                action='store_true', dest='notify')
+        parser_describe_instances.add_argument('-t', '--warning-threshold',
+                                               help='warning emails threshold (hours, default: %(default)s)',
+                                               dest='warning_threshold', default=12, type=int)
         parser_describe_instances.add_argument('-S', '--stop', help='stop instances running longer than set threshold',
                                                action='store_true', dest='stop')
+        parser_describe_instances.add_argument('-T', '--stop-threshold',
+                                               help='instance auto stop threshold (hours, default: %(default)s)',
+                                               dest='stop_threshold', default=72, type=int)
 
         parser_describe_regions = subparsers.add_parser('describe-regions', help='display list of available regions')
         parser_describe_regions.add_argument('-b', '--disable-border', help='disable table border',
