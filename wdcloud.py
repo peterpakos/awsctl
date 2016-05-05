@@ -1,6 +1,6 @@
 # WANdisco Cloud module
 #
-# Version 16.5.2
+# Version 16.5.12
 #
 # Author: Peter Pakos <peter.pakos@wandisco.com>
 
@@ -208,7 +208,8 @@ Thank you.
         status, msg = self._mail.send(sender, recipient, subject, message, html=True, cc=cc_recipient)
         print(msg['message'])
 
-    def describe_instances(self, disable_border=False, disable_header=False, state=None, notify=False, stop=False):
+    def describe_instances(self, disable_border=False, disable_header=False, state=None, notify=False, stop=False,
+                           warning_threshold=None, stop_threshold=None):
         if not state:
             state = ['running', 'pending', 'shutting-down', 'stopped', 'stopping', 'terminated']
         table = prettytable.PrettyTable(['Zone', 'ID', 'Name', 'Type', 'Image', 'State',
