@@ -27,8 +27,8 @@ class Main(object):
                                            state=self._args.state,
                                            notify=self._args.notify,
                                            stop=self._args.stop,
-                                           warning_threshold=self._args.warning_threshold,
-                                           stop_threshold=self._args.stop_threshold)
+                                           warning_threshold=self._args.warning_threshold*3600,
+                                           stop_threshold=self._args.stop_threshold*3600)
         elif self._args.command == 'describe-regions':
             self._cloud.describe_regions(disable_border=self._args.disable_border,
                                          disable_header=self._args.disable_header)
