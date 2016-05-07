@@ -23,13 +23,11 @@ class Cloud(object):
         self._profile_name = profile_name
         self._region = region
         self._mail = wdmailer.Mail()
-        self._warning_threshold = 3600 * 12
-        self._stop_threshold = 3600 * 1 * 5
         self._heads = {
-            'dev': ['yuri.yudin@wandisco.com', 'rob.budas@wandisco.com'],
-            'qa': ['andrew.heawood@wandisco.com', 'rob.budas@wandisco.com', 'virginia.wang@wandisco.com'],
-            'sales': ['scott.rudenstein@wandisco.com', 'rob.budas@wandisco.com'],
-            'support': ['mark.kelly@wandisco.com', 'rob.budas@wandisco.com']
+            'dev': ['yyuri.yudin@wandisco.com', 'rrob.budas@wandisco.com'],
+            'qa': ['aandrew.heawood@wandisco.com', 'rrob.budas@wandisco.com', 'vvirginia.wang@wandisco.com'],
+            'sales': ['sscott.rudenstein@wandisco.com', 'rrob.budas@wandisco.com'],
+            'support': ['mmark.kelly@wandisco.com', 'rrob.budas@wandisco.com']
         }
         if profile_name in self._heads:
             self._head = self._heads[profile_name]
@@ -118,7 +116,7 @@ class AWS(Cloud):
         uptime = ' '.join(uptime)
         return uptime
 
-    def _send_alert(self, user, region_ids, uptime_dict, warning=False):
+    def _send_alert(self, user, region_ids, uptime_dict, warning=False, warning_threshold=None):
         number = 0
         table = prettytable.PrettyTable(['Zone', 'Instance ID', 'Uptime'])
         table.align = 'l'
@@ -164,8 +162,8 @@ Thank you.
                 s,
                 str(self._profile_name).upper(),
                 table,
-                self._warning_threshold/3600,
-                self._warning_threshold/3600
+                warning_threshold/3600,
+                warning_threshold/3600
             )
         else:
             cc_recipient = self._head
@@ -192,9 +190,9 @@ Thank you.
                 s,
                 str(self._profile_name).upper(),
                 have,
-                self._warning_threshold/3600,
+                warning_threshold/3600,
                 table,
-                self._warning_threshold/3600
+                warning_threshold/3600
             )
 
         message += '\n-- \nInfrastructure & IT Team'
@@ -250,7 +248,7 @@ Thank you.
                 if instance_state == 'running':
                     seconds = self._date_diff(now, then)
                     uptime = self._get_uptime(seconds)
-                    if seconds >= self._stop_threshold and not excluded:
+                    if seconds >= stop_threshold and not excluded:
                         if last_user in to_be_stopped_dict:
                             if region in to_be_stopped_dict[last_user]:
                                 to_be_stopped_dict[last_user][region].append(instance.id)
@@ -273,9 +271,9 @@ Thank you.
                             notify_dict[last_user] = {}
                             notify_dict[last_user][region] = []
                             notify_dict[last_user][region].append(instance.id)
-                        if seconds >= self._warning_threshold:
+                        if seconds >= warning_threshold:
                             warning_dict[last_user] = True
-                        elif seconds >= self._stop_threshold:
+                        elif seconds >= stop_threshold:
                             stop_dict[last_user] = True
                 try:
                     image_name = instance.image.name[0:15]
@@ -314,7 +312,7 @@ Thank you.
                 warning = True
             else:
                 warning = False
-            self._send_alert(user, region_ids, uptime_dict, warning)
+            self._send_alert(user, region_ids, uptime_dict, warning, warning_threshold=warning_threshold)
         if stop:
             print(to_be_stopped_dict)
 
