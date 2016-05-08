@@ -12,7 +12,7 @@ import wdcloud
 
 
 class Main(object):
-    _version = '16.5.12'
+    _version = '16.5.12a'
     _name = os.path.basename(sys.argv[0])
 
     def __init__(self):
