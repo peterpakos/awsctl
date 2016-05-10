@@ -116,7 +116,7 @@ class AWS(Cloud):
         uptime = ' '.join(uptime)
         return uptime
 
-    def _send_alert(self, user, region_ids, uptime_dict, warning=False, warning_threshold=None):
+    def _send_alert(self, user, region_ids, uptime_dict, warning=False, warning_threshold=None, stop_threshold=None):
         number = 0
         table = prettytable.PrettyTable(['Zone', 'Instance ID', 'Uptime'])
         table.align = 'l'
@@ -147,13 +147,15 @@ This is just a friendly reminder that you have %s running EC2 instance%s in AWS 
 
 Make sure any running instances are either STOPPED or TERMINATED before close of business.
 
-If you wish to keep your instances running for more than %s hours, please raise a ticket using \
+If you wish to keep your instances running for longer than %s hours, please raise a ticket using \
 <a href="http://helpdesk.wandisco.com">IT Helpdesk</a> so we can exclude them from reporting.
+
+Please note:
+<li>any unexcluded instances running for longer than %s hours will be reported to the respective head of department</li>
+<li>any unexcluded instances running for longer than %s hours will be STOPPED automatically.</li>
 
 For more information check our \
 <a href="https://workspace.wandisco.com/display/IT/AWS+Best+Practices+at+WANdisco">AWS Best Practices</a>.
-
-Please note, any instances running for more than %s hours will be reported to the respective head of department.
 
 Thank you.
 ''' % (
@@ -163,7 +165,8 @@ Thank you.
                 str(self._profile_name).upper(),
                 table,
                 warning_threshold/3600,
-                warning_threshold/3600
+                warning_threshold/3600,
+                stop_threshold/3600
             )
         else:
             cc_recipient = self._head
@@ -312,7 +315,12 @@ Thank you.
                 warning = True
             else:
                 warning = False
-            self._send_alert(user, region_ids, uptime_dict, warning, warning_threshold=warning_threshold)
+            self._send_alert(user,
+                             region_ids,
+                             uptime_dict,
+                             warning,
+                             warning_threshold=warning_threshold,
+                             stop_threshold=stop_threshold)
         if stop:
             print(to_be_stopped_dict)
 
