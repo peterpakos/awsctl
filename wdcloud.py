@@ -1,6 +1,6 @@
 # WANdisco Cloud module
 #
-# Version 16.5.12a
+# Version 16.5.12b
 #
 # Author: Peter Pakos <peter.pakos@wandisco.com>
 
