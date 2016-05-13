@@ -1,6 +1,6 @@
 # WANdisco Cloud module
 #
-# Version 16.5.12b
+# Version 16.5.16
 #
 # Author: Peter Pakos <peter.pakos@wandisco.com>
 
@@ -116,7 +116,7 @@ class AWS(Cloud):
         uptime = ' '.join(uptime)
         return uptime
 
-    def _send_alert(self, user, region_ids, uptime_dict, warning=False, warning_threshold=None, stop_threshold=None):
+    def _send_alert(self, user, region_ids, uptime_dict, mail_type, warning_threshold=None, stop_threshold=None):
         number = 0
         table = prettytable.PrettyTable(['Zone', 'Instance ID', 'Uptime'])
         table.align = 'l'
@@ -136,8 +136,7 @@ class AWS(Cloud):
         sender = 'Infrastructure & IT <infra@wandisco.com>'
         recipient = user + '@wandisco.com'
         cc_recipient = None
-        if not warning:
-            email_type = 'notification'
+        if mail_type == 'info':
             subject = 'AWS %s: EC2 running instances' % str(self._profile_name).upper()
             message = '''Hi %s,
 
@@ -151,9 +150,7 @@ If you wish to keep your instances running for longer than %s hours, please rais
 <a href="http://helpdesk.wandisco.com">IT Helpdesk</a> so we can exclude them from reporting.
 
 Please note:
-<li>any unexcluded instances running for longer than %s hours will be reported to the respective head of department</li>
-<li>any unexcluded instances running for longer than %s hours will be STOPPED automatically.</li>
-
+<li>any unexcluded instances running for longer than %s hours will be reported to the respective head of department</li><li>any unexcluded instances running for longer than %s hours will be STOPPED automatically.</li>
 For more information check our \
 <a href="https://workspace.wandisco.com/display/IT/AWS+Best+Practices+at+WANdisco">AWS Best Practices</a>.
 
@@ -170,7 +167,6 @@ Thank you.
             )
         else:
             cc_recipient = self._head
-            email_type = 'warning'
             subject = '*WARNING* AWS %s: EC2 running instances' % str(self._profile_name).upper()
             message = '''Hi %s,
 
@@ -205,7 +201,7 @@ Thank you.
                 cc = ' (cc: %s)' % ', '.join(cc_recipient)
             else:
                 cc = ' (cc: %s)' % cc_recipient
-        print('Sending %s email to %s%s... ' % (email_type, recipient, cc), end='')
+        print('Sending %s email to %s%s... ' % (mail_type, recipient, cc), end='')
         status, msg = self._mail.send(sender, recipient, subject, message, html=True, cc=cc_recipient)
         print(msg['message'])
 
@@ -312,17 +308,17 @@ Thank you.
             print()
         for user, region_ids in notify_dict.items():
             if user in warning_dict:
-                warning = True
+                mail_type = 'warning'
+            elif user in to_be_stopped_dict:
+                mail_type = 'alert'
             else:
-                warning = False
+                mail_type = 'info'
             self._send_alert(user,
                              region_ids,
                              uptime_dict,
-                             warning,
+                             mail_type,
                              warning_threshold=warning_threshold,
                              stop_threshold=stop_threshold)
-        if stop:
-            print(to_be_stopped_dict)
 
     def describe_regions(self, disable_border=False, disable_header=False):
         table = prettytable.PrettyTable(['Region'], border=not disable_border, header=not disable_header,
