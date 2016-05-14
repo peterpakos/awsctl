@@ -24,10 +24,10 @@ class Cloud(object):
         self._region = region
         self._mail = wdmailer.Mail()
         self._heads = {
-            'dev': ['yyuri.yudin@wandisco.com', 'rrob.budas@wandisco.com'],
+            'dev': ['yuri.yudin@wandisco.com', 'rob.budas@wandisco.com'],
             'qa': ['aandrew.heawood@wandisco.com', 'rrob.budas@wandisco.com', 'vvirginia.wang@wandisco.com'],
-            'sales': ['sscott.rudenstein@wandisco.com', 'rrob.budas@wandisco.com'],
-            'support': ['mmark.kelly@wandisco.com', 'rrob.budas@wandisco.com']
+            'sales': ['scott.rudenstein@wandisco.com', 'rob.budas@wandisco.com'],
+            'support': ['mark.kelly@wandisco.com', 'rob.budas@wandisco.com']
         }
         if profile_name in self._heads:
             self._head = self._heads[profile_name]
@@ -116,7 +116,7 @@ class AWS(Cloud):
         uptime = ' '.join(uptime)
         return uptime
 
-    def _send_alert(self, user, region_ids, uptime_dict, mail_type, warning_threshold=None, stop_threshold=None):
+    def _send_alert(self, mail_type, user, region_ids, uptime_dict, warning_threshold, stop_threshold):
         number = 0
         table = prettytable.PrettyTable(['Zone', 'Instance ID', 'Uptime'])
         table.align = 'l'
@@ -150,7 +150,8 @@ If you wish to keep your instances running for longer than %s hours, please rais
 <a href="http://helpdesk.wandisco.com">IT Helpdesk</a> so we can exclude them from reporting.
 
 Please note:
-<li>any unexcluded instances running for longer than %s hours will be reported to the respective head of department</li><li>any unexcluded instances running for longer than %s hours will be STOPPED automatically.</li>
+<li>any unexcluded instances running for longer than %s hours will be reported to the respective head of department</li\
+><li>any unexcluded instances running for longer than %s hours will be automatically STOPPED.</li>
 For more information check our \
 <a href="https://workspace.wandisco.com/display/IT/AWS+Best+Practices+at+WANdisco">AWS Best Practices</a>.
 
@@ -307,16 +308,16 @@ Thank you.
         if len(notify_dict) > 0:
             print()
         for user, region_ids in notify_dict.items():
-            if user in warning_dict:
-                mail_type = 'warning'
-            elif user in to_be_stopped_dict:
+            if user in to_be_stopped_dict:
                 mail_type = 'alert'
+            elif user in warning_dict:
+                mail_type = 'warning'
             else:
                 mail_type = 'info'
-            self._send_alert(user,
+            self._send_alert(mail_type,
+                             user,
                              region_ids,
                              uptime_dict,
-                             mail_type,
                              warning_threshold=warning_threshold,
                              stop_threshold=stop_threshold)
 
