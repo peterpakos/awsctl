@@ -1,6 +1,6 @@
 # WANdisco Cloud module
 #
-# Version 16.5.16a
+# Version 16.5.16b
 #
 # Author: Peter Pakos <peter.pakos@wandisco.com>
 
@@ -25,7 +25,7 @@ class Cloud(object):
         self._mail = wdmailer.Mail()
         self._heads = {
             'dev': ['yuri.yudin@wandisco.com', 'rob.budas@wandisco.com'],
-            'qa': ['aandrew.heawood@wandisco.com', 'rrob.budas@wandisco.com', 'vvirginia.wang@wandisco.com'],
+            'qa': ['andrew.heawood@wandisco.com', 'rob.budas@wandisco.com', 'virginia.wang@wandisco.com'],
             'sales': ['scott.rudenstein@wandisco.com', 'rob.budas@wandisco.com'],
             'support': ['mark.kelly@wandisco.com', 'rob.budas@wandisco.com']
         }
@@ -136,6 +136,8 @@ class AWS(Cloud):
         sender = 'Infrastructure & IT <infra@wandisco.com>'
         recipient = user + '@wandisco.com'
         cc_recipient = None
+        subject = None
+        message = None
         if mail_type == 'info':
             subject = 'AWS %s: EC2 running instances' % str(self._profile_name).upper()
             message = '''Hi %s,
@@ -166,9 +168,9 @@ Thank you.
                 warning_threshold/3600,
                 stop_threshold/3600
             )
-        else:
+        elif mail_type == 'warning':
+            subject = '*%s* AWS %s: EC2 running instances' % (mail_type.upper(), str(self._profile_name).upper())
             cc_recipient = self._head
-            subject = '*WARNING* AWS %s: EC2 running instances' % str(self._profile_name).upper()
             message = '''Hi %s,
 
 You currently have %s EC2 instance%s in AWS %s account that %s been running for more than %s hours:
@@ -194,6 +196,37 @@ Thank you.
                 table,
                 warning_threshold/3600
             )
+        elif mail_type == 'alert':
+            subject = '*%s* AWS %s: EC2 running instances' % (mail_type.upper(), str(self._profile_name).upper())
+            cc_recipient = self._head
+            message = '''Hi %s,
+
+You currently have %s EC2 instance%s in AWS %s account that %s been running for more than %s hours:
+
+%s
+
+Please STOP or TERMINATE any instances that are no longer in use.
+
+If you wish to keep your instances running for more than %s hours, please raise a ticket using \
+<a href="http://helpdesk.wandisco.com">IT Helpdesk</a> so we can exclude them from reporting.
+
+For more information check our \
+<a href="https://workspace.wandisco.com/display/IT/AWS+Best+Practices+at+WANdisco">AWS Best Practices</a>.
+
+Thank you.
+''' % (
+                user.split('.')[0].capitalize(),
+                number,
+                s,
+                str(self._profile_name).upper(),
+                have,
+                warning_threshold / 3600,
+                table,
+                warning_threshold / 3600
+            )
+        else:
+            print('We should not reach this part!')
+            exit(1)
 
         message += '\n-- \nInfrastructure & IT Team'
         cc = ''
