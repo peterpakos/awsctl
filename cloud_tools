@@ -85,7 +85,7 @@ class Main(object):
                                                action='store_true', dest='stop')
         parser_describe_instances.add_argument('-T', '--alert-threshold',
                                                help='instance auto stop & alert threshold (hours, default: %(default)s)',
-                                               dest='alert_threshold', default=72, type=int)
+                                               dest='alert_threshold', default=24, type=int)
 
         parser_describe_regions = subparsers.add_parser('describe-regions', help='display list of available regions')
         parser_describe_regions.add_argument('-b', '--disable-border', help='disable table border',
