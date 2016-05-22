@@ -24,11 +24,11 @@ class Cloud(object):
         self._region = region
         self._mail = wdmailer.Mail()
         self._heads = {
-            'dev': ['infra@wandisco.com', 'yuri.yudin@wandisco.com', 'rob.budas@wandisco.com'],
-            'qa': ['infra@wandisco.com', 'andrew.heawood@wandisco.com', 'rob.budas@wandisco.com',
-                   'virginia.wang@wandisco.com', 'stephen.bell@wandisco.com'],
-            'sales': ['infra@wandisco.com', 'scott.rudenstein@wandisco.com', 'rob.budas@wandisco.com'],
-            'support': ['infra@wandisco.com', 'mark.kelly@wandisco.com', 'rob.budas@wandisco.com']
+            'dev': ['iinfra@wandisco.com', 'ayuri.yudin@wandisco.com', 'arob.budas@wandisco.com'],
+            'qa': ['iinfra@wandisco.com', 'aandrew.heawood@wandisco.com', 'arob.budas@wandisco.com',
+                   'vvirginia.wang@wandisco.com', 'astephen.bell@wandisco.com'],
+            'sales': ['iinfra@wandisco.com', 'ascott.rudenstein@wandisco.com', 'arob.budas@wandisco.com'],
+            'support': ['iinfra@wandisco.com', 'amark.kelly@wandisco.com', 'arob.budas@wandisco.com']
         }
         if profile_name in self._heads:
             self._head = self._heads[profile_name]
@@ -362,8 +362,7 @@ Thank you.
     def _stop_instance(self, region, instance_ids):
         ec2r = self._session.resource('ec2', region_name=region)
         response = ec2r.instances.filter(InstanceIds=instance_ids).stop()
-        print(response)
-        if response['ResponseMetadata']['HTTPStatusCode'] == 200:
+        if response[0]['ResponseMetadata']['HTTPStatusCode'] == 200:
             return True
         else:
             return False
