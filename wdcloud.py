@@ -24,11 +24,11 @@ class Cloud(object):
         self._region = region
         self._mail = wdmailer.Mail()
         self._heads = {
-            'dev': ['iinfra@wandisco.com', 'ayuri.yudin@wandisco.com', 'arob.budas@wandisco.com'],
-            'qa': ['iinfra@wandisco.com', 'aandrew.heawood@wandisco.com', 'arob.budas@wandisco.com',
-                   'vvirginia.wang@wandisco.com', 'astephen.bell@wandisco.com'],
-            'sales': ['iinfra@wandisco.com', 'ascott.rudenstein@wandisco.com', 'arob.budas@wandisco.com'],
-            'support': ['iinfra@wandisco.com', 'amark.kelly@wandisco.com', 'arob.budas@wandisco.com']
+            'dev': ['infra@wandisco.com', 'yuri.yudin@wandisco.com', 'rob.budas@wandisco.com'],
+            'qa': ['infra@wandisco.com', 'andrew.heawood@wandisco.com', 'rob.budas@wandisco.com',
+                   'virginia.wang@wandisco.com', 'stephen.bell@wandisco.com'],
+            'sales': ['infra@wandisco.com', 'scott.rudenstein@wandisco.com', 'rob.budas@wandisco.com'],
+            'support': ['infra@wandisco.com', 'mark.kelly@wandisco.com', 'rob.budas@wandisco.com']
         }
         if profile_name in self._heads:
             self._head = self._heads[profile_name]
