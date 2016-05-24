@@ -119,7 +119,7 @@ class AWS(Cloud):
 
     def _send_alert(self, mail_type, user, region_ids, uptime_dict, warning_threshold, alert_threshold, stop=False):
         number = 0
-        table = prettytable.PrettyTable(['Zone', 'Instance ID', 'Uptime'])
+        table = prettytable.PrettyTable(['Region', 'Instance ID', 'Uptime'])
         table.align = 'l'
         for region, ids in region_ids.items():
             number += len(ids)
