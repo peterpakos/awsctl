@@ -17,6 +17,7 @@ class Main(object):
 
     def __init__(self):
         self._args = self._parse_args()
+        print(self._args)
         self._cloud = wdcloud.Cloud.loader(self._args.cloud_provider, self._args.profile_name, self._args.region)
 
     def run(self):
@@ -107,7 +108,7 @@ class Main(object):
 
         parser_describe_regions = subparsers.add_parser('sg', help='batch add rules to Security Groups')
         parser_describe_regions.add_argument('-c', '--cidr', help='IP address in CIDR notation',
-                                             action='store_true', dest='disable_border')
+                                             action='append', dest='cidr')
 
         return parser.parse_args()
 
