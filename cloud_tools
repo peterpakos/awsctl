@@ -108,7 +108,7 @@ class Main(object):
 
         parser_describe_regions = subparsers.add_parser('sg', help='batch add rules to Security Groups')
         parser_describe_regions.add_argument('-c', '--cidr', help='IP address in CIDR notation',
-                                             action='append', dest='cidr')
+                                             dest='cidr')
 
         return parser.parse_args()
 
