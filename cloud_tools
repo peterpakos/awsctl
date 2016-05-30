@@ -17,7 +17,6 @@ class Main(object):
 
     def __init__(self):
         self._args = self._parse_args()
-        print(self._args)
         self._cloud = wdcloud.Cloud.loader(self._args.cloud_provider, self._args.profile_name, self._args.region)
 
     def run(self):
@@ -45,6 +44,8 @@ class Main(object):
                             key=self._args.key,
                             value=self._args.value,
                             delete=self._args.delete)
+        elif self._args.command == 'sg':
+            self._cloud.sg(cidr=self._args.cidr)
         else:
             self.die('Command %s not implemented yet' % self._args.command)
 
@@ -85,8 +86,9 @@ class Main(object):
         parser_describe_instances.add_argument('-S', '--stop', help='stop instances running longer than set threshold',
                                                action='store_true', dest='stop')
         parser_describe_instances.add_argument('-T', '--alert-threshold',
-                                               help='instance auto stop & alert threshold (hours, default: %(default)s)',
-                                               dest='alert_threshold', default=24, type=int)
+                                               dest='alert_threshold', default=24, type=int,
+                                               help='instance auto stop & alert threshold (hours, default: %(default)s)'
+                                               )
 
         parser_describe_regions = subparsers.add_parser('describe-regions', help='display list of available regions')
         parser_describe_regions.add_argument('-b', '--disable-border', help='disable table border',
