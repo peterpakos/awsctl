@@ -422,6 +422,8 @@ Thank you.
                 region = 'any region'
             print('Instance ID %s not found in %s' % (', '.join(instance_id), region))
 
+    def sg(self, cidr):
+        print(cidr)
 
 class AZURE(Cloud):
     def __init__(self, *args, **kwargs):
