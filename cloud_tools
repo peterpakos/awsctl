@@ -26,8 +26,8 @@ class Main(object):
                                            state=self._args.state,
                                            notify=self._args.notify,
                                            stop=self._args.stop,
-                                           warning_threshold=self._args.warning_threshold*3600,
-                                           alert_threshold=self._args.alert_threshold*3600)
+                                           warning_threshold=self._args.warning_threshold * 3600,
+                                           alert_threshold=self._args.alert_threshold * 3600)
         elif self._args.command == 'describe-regions':
             self._cloud.describe_regions(disable_border=self._args.disable_border,
                                          disable_header=self._args.disable_header)
@@ -109,8 +109,8 @@ class Main(object):
         parser_tag.add_argument('-d', '--delete', help='delete tag', dest='delete', action='store_true', default=False)
 
         parser_describe_regions = subparsers.add_parser('sg', help='batch add rules to Security Groups')
-        parser_describe_regions.add_argument('-c', '--cidr', help='IP address in CIDR notation',
-                                             dest='cidr')
+        parser_describe_regions.add_argument('-c', '--cidr', help='IP address in CIDR notation', dest='cidr',
+                                             required=True)
 
         return parser.parse_args()
 
