@@ -5,9 +5,11 @@
 # Author: Peter Pakos <peter.pakos@wandisco.com>
 
 from __future__ import print_function
+
+import argparse
 import os
 import sys
-import argparse
+
 import wdcloud
 
 
