@@ -5,11 +5,12 @@
 # Author: Peter Pakos <peter.pakos@wandisco.com>
 
 from __future__ import print_function
+
 import boto3
 import botocore.exceptions
 
-PROFILE_NAME = 'default'
-CIDR = '81.23.60.158/32'
+PROFILE_NAME = 'infra'
+CIDR = '192.31.132.22/32'
 
 
 def main():
@@ -18,7 +19,7 @@ def main():
 
     regions = []
     for region in ec2c.describe_regions()['Regions']:
-                regions.append(region['RegionName'])
+        regions.append(region['RegionName'])
 
     for region in regions:
         ec2 = session.resource('ec2', region_name=region)
