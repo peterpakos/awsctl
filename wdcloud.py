@@ -5,13 +5,16 @@
 # Author: Peter Pakos <peter.pakos@wandisco.com>
 
 from __future__ import print_function
+
 import abc
+import datetime
+
 import boto3
 import botocore.exceptions
 import prettytable
-import datetime
 import pytz
 import tzlocal
+
 import wdmailer
 
 
@@ -96,8 +99,8 @@ class AWS(Cloud):
 
     @staticmethod
     def _date_diff(date1, date2):
-        diff = (date1-date2)
-        diff = (diff.microseconds + (diff.seconds + diff.days * 24 * 3600) * 10**6) / 10**6
+        diff = (date1 - date2)
+        diff = (diff.microseconds + (diff.seconds + diff.days * 24 * 3600) * 10 ** 6) / 10 ** 6
         return diff
 
     @staticmethod
@@ -424,6 +427,7 @@ Thank you.
 
     def sg(self, cidr):
         print(cidr)
+
 
 class AZURE(Cloud):
     def __init__(self, *args, **kwargs):
