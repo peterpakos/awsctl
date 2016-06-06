@@ -5,12 +5,14 @@
 # Author: Peter Pakos <peter.pakos@wandisco.com>
 
 from __future__ import print_function
-import sys
-import os
+
 import argparse
-import platform
-import sendgrid
 import json
+import os
+import platform
+import sys
+
+import sendgrid
 
 
 class Main(object):
@@ -55,7 +57,6 @@ class Main(object):
 
 
 class Mail(object):
-
     def __init__(self):
         self._cwd = os.path.dirname(os.path.abspath(sys.argv[0]))
         self._api_file = self._cwd + '/wdmailer.api'
