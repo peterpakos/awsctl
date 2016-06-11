@@ -110,9 +110,11 @@ class Main(object):
         parser_tag.add_argument('-v', '--value', help='value', dest='value', default='')
         parser_tag.add_argument('-d', '--delete', help='delete tag', dest='delete', action='store_true', default=False)
 
-        parser_describe_regions = subparsers.add_parser('sg', help='batch edit Security Groups rules')
-        parser_describe_regions.add_argument('-c', '--cidr', help='IP address in CIDR notation', dest='cidr',
-                                             required=True)
+        parser_sg = subparsers.add_parser('sg', help='batch edit Security Groups rules')
+        parser_sg.add_argument('-c', '--cidr', help='IP address in CIDR notation', dest='cidr',
+                               required=True)
+        parser_sg.add_argument('-d', '--delete', help='delete rule', dest='sg_delete', action='store_true',
+                               default=False)
 
         return parser.parse_args()
 
