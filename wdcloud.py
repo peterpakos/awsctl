@@ -425,8 +425,7 @@ Thank you.
                 region = 'any region'
             print('Instance ID %s not found in %s' % (', '.join(instance_id), region))
 
-    def sg(self, cidr):
-
+    def sg(self, cidr, delete=False):
         for region in self._regions:
             ec2r = self._session.resource('ec2', region_name=region)
             security_groups = ec2r.security_groups.all()
