@@ -47,7 +47,7 @@ class Main(object):
                             value=self._args.value,
                             delete=self._args.delete)
         elif self._args.command == 'sg':
-            self._cloud.sg(cidr=self._args.cidr)
+            self._cloud.sg(cidr=self._args.cidr, delete=self._args.sg_delete)
         else:
             self.die('Command %s not implemented yet' % self._args.command)
 
