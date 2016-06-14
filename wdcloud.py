@@ -426,6 +426,14 @@ Thank you.
             print('Instance ID %s not found in %s' % (', '.join(instance_id), region))
 
     def sg(self, cidr, delete=False):
+        if delete:
+            action = 'Deleting'
+            tofrom = 'from'
+        else:
+            action = 'Adding'
+            tofrom = 'to'
+        print('%s source %s %s Security Groups inbound rules...' % (action, cidr, tofrom))
+
         for region in self._regions:
             ec2r = self._session.resource('ec2', region_name=region)
             security_groups = ec2r.security_groups.all()
@@ -436,44 +444,74 @@ Thank you.
                 print('\nSECURITY GROUP: %s (Region %s: %s/%s)' % (sg.id, region, i, num))
                 try:
                     print('ALL TRAFFIC: ', end='')
-                    sg.authorize_ingress(
-                        IpProtocol='-1',
-                        CidrIp=cidr
-                    )
+                    if delete:
+                        sg.revoke_ingress(
+                            IpProtocol='-1',
+                            CidrIp=cidr
+                        )
+                    else:
+                        sg.authorize_ingress(
+                            IpProtocol='-1',
+                            CidrIp=cidr
+                        )
                 except botocore.exceptions.ClientError as err:
                     print(err)
                     try:
                         print('TCP: ', end='')
-                        sg.authorize_ingress(
-                            IpProtocol='tcp',
-                            FromPort=0,
-                            ToPort=65535,
-                            CidrIp=cidr
-                        )
+                        if delete:
+                            sg.revoke_ingress(
+                                IpProtocol='tcp',
+                                FromPort=0,
+                                ToPort=65535,
+                                CidrIp=cidr
+                            )
+                        else:
+                            sg.authorize_ingress(
+                                IpProtocol='tcp',
+                                FromPort=0,
+                                ToPort=65535,
+                                CidrIp=cidr
+                            )
                     except botocore.exceptions.ClientError as err:
                         print(err)
                     else:
                         print('OK')
                     try:
                         print('UDP: ', end='')
-                        sg.authorize_ingress(
-                            IpProtocol='udp',
-                            FromPort=0,
-                            ToPort=65535,
-                            CidrIp=cidr
-                        )
+                        if delete:
+                            sg.revoke_ingress(
+                                IpProtocol='udp',
+                                FromPort=0,
+                                ToPort=65535,
+                                CidrIp=cidr
+                            )
+                        else:
+                            sg.authorize_ingress(
+                                IpProtocol='udp',
+                                FromPort=0,
+                                ToPort=65535,
+                                CidrIp=cidr
+                            )
                     except botocore.exceptions.ClientError as err:
                         print(err)
                     else:
                         print('OK')
                     try:
                         print('ICMP: ', end='')
-                        sg.authorize_ingress(
-                            IpProtocol='icmp',
-                            FromPort=-1,
-                            ToPort=-1,
-                            CidrIp=cidr
-                        )
+                        if delete:
+                            sg.revoke_ingress(
+                                IpProtocol='icmp',
+                                FromPort=-1,
+                                ToPort=-1,
+                                CidrIp=cidr
+                            )
+                        else:
+                            sg.authorize_ingress(
+                                IpProtocol='icmp',
+                                FromPort=-1,
+                                ToPort=-1,
+                                CidrIp=cidr
+                            )
                     except botocore.exceptions.ClientError as err:
                         print(err)
                     else:
