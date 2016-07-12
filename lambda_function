@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 #
 # Lambda function to tag EC2 instances
-# Version 16.4.18
+# Version 16.7.12
 #
 # Author: Peter Pakos <peter.pakos@wandisco.com>
 
@@ -57,7 +57,6 @@ def lambda_handler(event, context):
     asg_uid = {}
     for event in events:
         instance_ids = []
-        response = None
 
         if event['eventName'] == 'RunJobFlow':
             print('Processing event %s...' % event['eventName'])
@@ -110,12 +109,16 @@ def lambda_handler(event, context):
             print('HTTP response: %s' % response['ResponseMetadata']['HTTPStatusCode'])
 
         elif event['eventName'] in ['RunInstances', 'StartInstances', 'StopInstances']:
+            print("Received event: " + json.dumps(event, indent=2))
             print('Processing event %s...' % event['eventName'])
             region = event['awsRegion']
             if event['userAgent'] in ['autoscaling.amazonaws.com', 'elasticmapreduce.amazonaws.com']:
                 print('Instance created by %s, skipping...' % event['userAgent'])
                 continue
-            user = event['userIdentity']['userName']
+            if event['userIdentity']['type'] == 'Root':
+                user = bucket.split('-')[1]
+            else:
+                user = event['userIdentity']['userName']
             ec2 = session.client('ec2', region_name=region)
             try:
                 for item in event['responseElements']['instancesSet']['items']:
