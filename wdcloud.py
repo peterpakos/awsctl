@@ -15,7 +15,7 @@ import prettytable
 import pytz
 import tzlocal
 
-import wdmailer
+import WDMail
 
 
 class Cloud(object):
@@ -25,9 +25,9 @@ class Cloud(object):
         self._cloud_provider = cloud_provider
         self._profile_name = profile_name
         self._region = region
-        self._mail = wdmailer.Mail()
+        self._mail = WDMail.WDMail()
         self._heads = {
-            'dev': ['infra@wandisco.com', 'yuri.yudin@wandisco.com', 'rob.budas@wandisco.com'],
+            'dev': ['iinfra@wandisco.com', 'yyuri.yudin@wandisco.com', 'rrob.budas@wandisco.com', 'peter@pakos.uk'],
             'qa': ['infra@wandisco.com', 'yuri.yudin@wandisco.com', 'rob.budas@wandisco.com',
                    'virginia.wang@wandisco.com', 'stephen.bell@wandisco.com'],
             'sales': ['infra@wandisco.com', 'scott.rudenstein@wandisco.com', 'rob.budas@wandisco.com'],
@@ -245,8 +245,11 @@ Thank you.
             else:
                 cc = ' (cc: %s)' % cc_recipient
         print('Sending %s email to %s%s... ' % (mail_type, recipient, cc), end='')
-        status, msg = self._mail.send(sender, recipient, subject, message, html=True, cc=cc_recipient)
-        print(msg['message'])
+        response = self._mail.send(sender, [recipient], subject, message, html=True, cc=cc_recipient)
+        if response == 202:
+            print('SUCCESS')
+        else:
+            print('FAILURE')
 
     def describe_instances(self, disable_border=False, disable_header=False, state=None, notify=False, stop=False,
                            warning_threshold=None, alert_threshold=None):
