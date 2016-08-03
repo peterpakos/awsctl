@@ -27,7 +27,7 @@ class Cloud(object):
         self._region = region
         self._mail = WDMail.WDMail()
         self._heads = {
-            'dev': ['iinfra@wandisco.com', 'yyuri.yudin@wandisco.com', 'rrob.budas@wandisco.com', 'peter@pakos.uk'],
+            'dev': ['infra@wandisco.com', 'yuri.yudin@wandisco.com', 'rob.budas@wandisco.com'],
             'qa': ['infra@wandisco.com', 'yuri.yudin@wandisco.com', 'rob.budas@wandisco.com',
                    'virginia.wang@wandisco.com', 'stephen.bell@wandisco.com'],
             'sales': ['infra@wandisco.com', 'scott.rudenstein@wandisco.com', 'rob.budas@wandisco.com'],
@@ -121,9 +121,9 @@ class AWS(Cloud):
         uptime = ' '.join(uptime)
         return uptime
 
-    def _send_alert(self, mail_type, user, region_ids, uptime_dict, warning_threshold, alert_threshold, stop=False):
+    def _send_alert(self, mail_type, user, region_ids, name_dict, uptime_dict, warning_threshold, alert_threshold, stop=False):
         number = 0
-        table = prettytable.PrettyTable(['Region', 'Instance ID', 'Uptime'])
+        table = prettytable.PrettyTable(['Region', 'Instance ID', 'Name', 'Uptime'])
         table.align = 'l'
         for region, ids in region_ids.items():
             number += len(ids)
@@ -131,6 +131,7 @@ class AWS(Cloud):
                 table.add_row([
                     region,
                     iid,
+                    name_dict[iid],
                     uptime_dict[iid]
                 ])
         s = ''
@@ -176,9 +177,13 @@ Thank you.
         elif mail_type == 'warning':
             subject = '*WARNING* AWS %s: EC2 running instances' % str(self._profile_name).upper()
             cc_recipient = self._head
+            if number > 1:
+                some_of_them = 'and either all or some of them'
+            else:
+                some_of_them = 'that'
             message = '''Hi %s,
 
-You currently have %s EC2 instance%s in AWS %s account that %s been running for longer than %s hours:
+You currently have %s EC2 instance%s in AWS %s account %s %s been running for longer than %s hours:
 
 %s
 
@@ -196,6 +201,7 @@ Thank you.
                 number,
                 s,
                 str(self._profile_name).upper(),
+                some_of_them,
                 have,
                 warning_threshold / 3600,
                 table,
@@ -264,6 +270,7 @@ Thank you.
         i = 0
         states_dict = {}
         uptime_dict = {}
+        name_dict = {}
         stop_dict = {}
         info_dict = {}
         warning_dict = {}
@@ -300,6 +307,7 @@ Thank you.
                         stop_dict[region].append(instance.id)
 
                     if last_user and notify and not excluded:
+                        name_dict[instance.id] = name
                         uptime_dict[instance.id] = uptime
                         if last_user not in info_dict:
                             info_dict[last_user] = {}
@@ -354,6 +362,7 @@ Thank you.
             self._send_alert(mail_type,
                              user,
                              region_ids,
+                             name_dict,
                              uptime_dict,
                              warning_threshold,
                              alert_threshold,
