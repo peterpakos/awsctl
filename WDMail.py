@@ -1,6 +1,6 @@
 # WANdisco Mail module
 #
-# Version 16.8.10
+# Version 16.8.10a
 #
 # Author: Peter Pakos <peter.pakos@wandisco.com>
 
@@ -30,14 +30,12 @@ class WDMail(object):
         if type(recipients) is not list:
             recipientsl = []
             if recipients is not None:
-                for r in recipients:
-                    recipientsl.append(r)
+                recipientsl.append(recipients)
             recipients = recipientsl
         if type(cc) is not list:
             ccl = []
             if cc is not None:
-                for c in cc:
-                    ccl.append(c)
+                ccl.append(cc)
             cc = ccl
 
         content = ''

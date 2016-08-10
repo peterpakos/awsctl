@@ -178,6 +178,8 @@ Thank you.
         elif mail_type == 'warning':
             subject = '*WARNING* AWS %s: EC2 running instances' % str(self._profile_name).upper()
             cc_recipient = self._head
+            if recipient in cc_recipient:
+                cc_recipient.remove(recipient)
             if number > 1:
                 some_of_them = 'and either all or some of them'
             else:
@@ -211,6 +213,8 @@ Thank you.
         elif mail_type == 'alert':
             subject = '*ALERT* AWS %s: EC2 running instances' % str(self._profile_name).upper()
             cc_recipient = self._head
+            if recipient in cc_recipient:
+                cc_recipient.remove(recipient)
             if stop:
                 stop_msg = '\n<strong>ANY INSTANCES RUNNING FOR LONGER THAN %s HOURS WILL BE STOPPED IMMEDIATELY!\
 </strong>\n\nPlease check your AWS account and make sure there are no more offending instances.\n' % \
