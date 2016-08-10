@@ -1,6 +1,6 @@
 # WANdisco Mail module
 #
-# Version 16.8.3
+# Version 16.8.10
 #
 # Author: Peter Pakos <peter.pakos@wandisco.com>
 
@@ -27,6 +27,19 @@ class WDMail(object):
         self._sg = sendgrid.SendGridAPIClient(apikey=os.environ.get('SENDGRID_API_KEY'))
 
     def send(self, sender, recipients, subject, message, html=False, cc=None):
+        if type(recipients) is not list:
+            recipientsl = []
+            if recipients is not None:
+                for r in recipients:
+                    recipientsl.append(r)
+            recipients = recipientsl
+        if type(cc) is not list:
+            ccl = []
+            if cc is not None:
+                for c in cc:
+                    ccl.append(c)
+            cc = ccl
+
         content = ''
         content_type = 'text/plain'
         if html:
@@ -46,6 +59,8 @@ class WDMail(object):
 '''
         recipient_list = []
         for recipient in recipients:
+            if recipient in cc:
+                cc.remove(recipient)
             recipient_list.append({"email": recipient})
         data = {
             'personalizations': [
@@ -64,7 +79,7 @@ class WDMail(object):
                 }
             ]
         }
-        if cc is not None:
+        if len(cc) > 0:
             cc_list = []
             for c in cc:
                 cc_list.append({'email': c})

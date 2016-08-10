@@ -1,6 +1,6 @@
 # WANdisco Cloud module
 #
-# Version 16.8.3
+# Version 16.8.10
 #
 # Author: Peter Pakos <peter.pakos@wandisco.com>
 
@@ -121,7 +121,8 @@ class AWS(Cloud):
         uptime = ' '.join(uptime)
         return uptime
 
-    def _send_alert(self, mail_type, user, region_ids, name_dict, uptime_dict, warning_threshold, alert_threshold, stop=False):
+    def _send_alert(self, mail_type, user, region_ids, name_dict, uptime_dict, warning_threshold, alert_threshold,
+                    stop=False):
         number = 0
         table = prettytable.PrettyTable(['Region', 'Instance ID', 'Name', 'Uptime'])
         table.align = 'l'
@@ -251,7 +252,7 @@ Thank you.
             else:
                 cc = ' (cc: %s)' % cc_recipient
         print('Sending %s email to %s%s... ' % (mail_type, recipient, cc), end='')
-        response = self._mail.send(sender, [recipient], subject, message, html=True, cc=cc_recipient)
+        response = self._mail.send(sender, recipient, subject, message, html=True, cc=cc_recipient)
         if response == 202:
             print('SUCCESS')
         else:
