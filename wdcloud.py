@@ -1,6 +1,6 @@
 # WANdisco Cloud module
 #
-# Version 16.8.10
+# Version 16.8.12
 #
 # Author: Peter Pakos <peter.pakos@wandisco.com>
 
@@ -18,7 +18,7 @@ import tzlocal
 import WDMail
 
 
-class Cloud(object):
+class WDCloud(object):
     __metaclass__ = abc.ABCMeta
 
     def __init__(self, cloud_provider, profile_name, region):
@@ -53,7 +53,7 @@ class Cloud(object):
         pass
 
 
-class AWS(Cloud):
+class AWS(WDCloud):
     def __init__(self, *args, **kwargs):
         super(AWS, self).__init__(*args, **kwargs)
         self._session = None
@@ -306,7 +306,7 @@ Thank you.
                     seconds = self._date_diff(now, then)
                     uptime = self._get_uptime(seconds)
 
-                    if seconds >= alert_threshold:
+                    if seconds >= alert_threshold and not excluded:
                         if region not in stop_dict:
                             stop_dict[region] = []
                         stop_dict[region].append(instance.id)
@@ -538,7 +538,7 @@ Thank you.
                     print('OK')
 
 
-class AZURE(Cloud):
+class AZURE(WDCloud):
     def __init__(self, *args, **kwargs):
         super(AZURE, self).__init__(*args, **kwargs)
         print('%s module not implemented yet, exiting...' % self._cloud_provider.upper())
@@ -551,7 +551,7 @@ class AZURE(Cloud):
         pass
 
 
-class GCE(Cloud):
+class GCE(WDCloud):
     def __init__(self, *args, **kwargs):
         super(GCE, self).__init__(*args, **kwargs)
         print('%s module not implemented yet, exiting...' % self._cloud_provider.upper())
