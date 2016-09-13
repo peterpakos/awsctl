@@ -32,7 +32,8 @@ class WDCloud(object):
                    'virginia.wang@wandisco.com', 'stephen.bell@wandisco.com'],
             'sales': ['infra@wandisco.com', 'scott.rudenstein@wandisco.com', 'rob.budas@wandisco.com'],
             'support': ['infra@wandisco.com', 'mark.kelly@wandisco.com', 'rob.budas@wandisco.com'],
-            'demo': ['infra@wandisco.com', 'scott.rudenstein@wandisco.com', 'rob.budas@wandisco.com']
+            'demo': ['infra@wandisco.com', 'scott.rudenstein@wandisco.com', 'rob.budas@wandisco.com',
+                     'eric.lotter@wandisco.com']
         }
         if profile_name in self._heads:
             self._head = self._heads[profile_name]
