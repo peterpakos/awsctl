@@ -1,6 +1,6 @@
 # WANdisco Cloud module
 #
-# Version 17.1.25
+# Version 17.1.26
 #
 # Author: Peter Pakos <peter.pakos@wandisco.com>
 
@@ -30,9 +30,11 @@ class WDCloud(object):
             'dev': ['infra@wandisco.com', 'yuri.yudin@wandisco.com', 'rob.budas@wandisco.com'],
             'qa': ['infra@wandisco.com', 'yuri.yudin@wandisco.com', 'rob.budas@wandisco.com',
                    'virginia.wang@wandisco.com', 'stephen.bell@wandisco.com'],
-            'sales': ['infra@wandisco.com', 'eric.lotter@wandisco.com', 'rob.budas@wandisco.com'],
+            'sales': ['infra@wandisco.com', 'eric.lotter@wandisco.com', 'keith.graham@wandisco.com',
+                      'rob.budas@wandisco.com'],
             'support': ['infra@wandisco.com', 'greg.mcmullin@wandisco.com', 'rob.budas@wandisco.com'],
-            'demo': ['infra@wandisco.com', 'rob.budas@wandisco.com', 'eric.lotter@wandisco.com']
+            'demo': ['infra@wandisco.com', 'rob.budas@wandisco.com', 'eric.lotter@wandisco.com',
+                     'keith.graham@wandisco.com']
         }
         if profile_name in self._heads:
             self._head = self._heads[profile_name]
