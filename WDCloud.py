@@ -1,21 +1,22 @@
 # WANdisco Cloud module
 #
-# Version 17.1.26
+# Version 17.3.16
 #
 # Author: Peter Pakos <peter.pakos@wandisco.com>
 
 from __future__ import print_function
-
+import os
 import abc
 import datetime
-
 import boto3
 import botocore.exceptions
 import prettytable
-import pytz
 import tzlocal
-
-import WDMail
+from WDMail import WDMail
+from CONFIG import CONFIG
+from oauth2client.client import GoogleCredentials, HttpAccessTokenRefreshError
+from googleapiclient import discovery
+import iso8601
 
 
 class WDCloud(object):
@@ -25,17 +26,9 @@ class WDCloud(object):
         self._cloud_provider = cloud_provider
         self._profile_name = profile_name
         self._region = region
-        self._mail = WDMail.WDMail()
-        self._heads = {
-            'dev': ['infra@wandisco.com', 'yuri.yudin@wandisco.com', 'rob.budas@wandisco.com'],
-            'qa': ['infra@wandisco.com', 'yuri.yudin@wandisco.com', 'rob.budas@wandisco.com',
-                   'virginia.wang@wandisco.com', 'stephen.bell@wandisco.com'],
-            'sales': ['infra@wandisco.com', 'eric.lotter@wandisco.com', 'keith.graham@wandisco.com',
-                      'rob.budas@wandisco.com'],
-            'support': ['infra@wandisco.com', 'greg.mcmullin@wandisco.com', 'rob.budas@wandisco.com'],
-            'demo': ['infra@wandisco.com', 'rob.budas@wandisco.com', 'eric.lotter@wandisco.com',
-                     'keith.graham@wandisco.com']
-        }
+        self._regions = []
+        self._mail = WDMail()
+        self._heads = CONFIG.HEADS
         if profile_name in self._heads:
             self._head = self._heads[profile_name]
         else:
@@ -43,16 +36,39 @@ class WDCloud(object):
 
     @staticmethod
     def loader(cloud_provider, profile_name, region):
-        classes = {'aws': AWS, 'azure': AZURE, 'gce': GCE}
+        classes = {'aws': AWS, 'azure': AZURE, 'gcp': GCP}
         return classes[cloud_provider](cloud_provider, profile_name, region)
 
     @abc.abstractmethod
-    def describe_instances(self):
+    def list(self):
         pass
 
     @abc.abstractmethod
-    def describe_regions(self):
+    def list_regions(self):
         pass
+
+    @staticmethod
+    def _get_uptime(seconds):
+        d = divmod(seconds, 86400)
+        h = divmod(d[1], 3600)
+        m = divmod(h[1], 60)
+        s = m[1]
+        uptime = []
+        if d[0] > 0:
+            uptime.append('%dd' % d[0])
+        if h[0] > 0:
+            uptime.append('%dh' % h[0])
+        if m[0] > 0:
+            uptime.append('%dm' % m[0])
+        uptime.append('%ds' % s)
+        uptime = ' '.join(uptime)
+        return uptime
+
+    @staticmethod
+    def _date_diff(date1, date2):
+        diff = (date1 - date2)
+        diff = (diff.microseconds + (diff.seconds + diff.days * 24 * 3600) * 10 ** 6) / 10 ** 6
+        return diff
 
 
 class AWS(WDCloud):
@@ -70,7 +86,6 @@ class AWS(WDCloud):
         except botocore.exceptions.NoRegionError as err:
             print(err)
             exit(1)
-        self._regions = []
         regions = None
         try:
             regions = ec2c.describe_regions()
@@ -99,29 +114,6 @@ class AWS(WDCloud):
                     value = item['Value']
                     break
         return value
-
-    @staticmethod
-    def _date_diff(date1, date2):
-        diff = (date1 - date2)
-        diff = (diff.microseconds + (diff.seconds + diff.days * 24 * 3600) * 10 ** 6) / 10 ** 6
-        return diff
-
-    @staticmethod
-    def _get_uptime(seconds):
-        d = divmod(seconds, 86400)
-        h = divmod(d[1], 3600)
-        m = divmod(h[1], 60)
-        s = m[1]
-        uptime = []
-        if d[0] > 0:
-            uptime.append('%dd' % d[0])
-        if h[0] > 0:
-            uptime.append('%dh' % h[0])
-        if m[0] > 0:
-            uptime.append('%dm' % m[0])
-        uptime.append('%ds' % s)
-        uptime = ' '.join(uptime)
-        return uptime
 
     def _send_alert(self, mail_type, user, region_ids, name_dict, uptime_dict, warning_threshold, alert_threshold,
                     stop=False):
@@ -264,12 +256,12 @@ Thank you.
         else:
             print('FAILURE')
 
-    def describe_instances(self, disable_border=False, disable_header=False, state=None, notify=False, stop=False,
-                           warning_threshold=None, alert_threshold=None):
+    def list(self, disable_border=False, disable_header=False, state=None, notify=False, stop=False,
+             warning_threshold=None, alert_threshold=None):
         if not state:
             state = ['running', 'pending', 'shutting-down', 'stopped', 'stopping', 'terminated']
         table = prettytable.PrettyTable(['Zone', 'ID', 'Name', 'Type', 'Image', 'State',
-                                         'Launch time', 'Uptime', 'Last user', 'SSH key', 'Private IP', 'Public IP',
+                                         'Launch time', 'Uptime', 'User', 'SSH key', 'Private IP', 'Public IP',
                                          'Exclude'],
                                         border=not disable_border, header=not disable_header, reversesort=True,
                                         sortby='Launch time')
@@ -302,7 +294,7 @@ Thank you.
                 name = self._get_tag(instance.tags, 'Name')
                 if name is None:
                     name = ''
-                then = instance.launch_time.astimezone(pytz.timezone(str(local_tz)))
+                then = instance.launch_time.astimezone(local_tz)
                 launch_time = str(then).partition('+')[0]
                 if instance_state == 'running':
                     seconds = self._date_diff(now, then)
@@ -390,7 +382,7 @@ Thank you.
         else:
             return False
 
-    def describe_regions(self, disable_border=False, disable_header=False):
+    def list_regions(self, disable_border=False, disable_header=False):
         table = prettytable.PrettyTable(['Region'], border=not disable_border, header=not disable_header,
                                         sortby='Region')
         table.align = 'l'
@@ -540,27 +532,135 @@ Thank you.
                     print('OK')
 
 
+class GCP(WDCloud):
+    def __init__(self, *args, **kwargs):
+        super(GCP, self).__init__(*args, **kwargs)
+        self._zones = []
+        self._project = 'fusion-gce-testing' if str(self._profile_name).lower() == 'old'\
+            else CONFIG.GCP_PROJECT_PREFIX + str(self._profile_name).lower()
+        if self._profile_name != 'default':
+            credentials_file = os.path.dirname(__file__) + '/' + str(self._profile_name).upper() + '.json'
+            if os.path.isfile(credentials_file):
+                os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = credentials_file
+            else:
+                print('Credentials file %s does not exist.' % credentials_file)
+                exit(1)
+        credentials = GoogleCredentials.get_application_default()
+        self._compute = discovery.build('compute', 'v1', credentials=credentials)
+        zones = None
+        try:
+            zones = self._compute.zones().list(project=self._project).execute()
+        except HttpAccessTokenRefreshError as e:
+            print('Auth Error (%s)' % e)
+            exit(1)
+        for zone in zones['items']:
+            self._zones.append(zone['name'])
+            region = str(zone['name']).rsplit('-', 1)[0]
+            if region not in self._regions:
+                self._regions.append(region)
+
+    @staticmethod
+    def _operations_get(operations, instance_id, resource):
+        if type(operations) is not list:
+            return None
+        for operation in operations:
+            if operation.get('targetId') == instance_id and operation.get('status') == 'DONE'\
+                    and operation.get('operationType') in ['insert', 'start']:
+                return operation.get(resource)
+        return None
+
+    def list(self, disable_border=False, disable_header=False, state=None, notify=False, stop=False,
+             warning_threshold=None, alert_threshold=None):
+        if not state:
+            state = ['running', 'staging', 'provisioning', 'stopping', 'terminated']
+        table = prettytable.PrettyTable(['Zone', 'Name', 'Type', 'Image', 'State', 'Creation time',
+                                         'Launch time', 'Uptime', 'User', 'Private IP', 'Public IP',
+                                         'Exclude'],
+                                        border=not disable_border, header=not disable_header, reversesort=True,
+                                        sortby='Creation time')
+        table.align = 'l'
+        i = 0
+        states_dict = {}
+        info_dict = {}
+        local_tz = tzlocal.get_localzone()
+        now = local_tz.localize(datetime.datetime.now())
+        for zone in self._zones:
+            instances = self._compute.instances().list(project=self._project, zone=zone).execute()
+            if not instances.get('items'):
+                continue
+            operations = self._compute.zoneOperations().list(project=self._project, zone=zone,
+                                                             orderBy='creationTimestamp desc').execute().get('items')
+            for instance in instances.get('items'):
+                instance_id = instance.get('id')
+                instance_state = str(instance.get('status')).lower()
+                if instance_state not in state:
+                    continue
+                creation_time = instance.get('creationTimestamp')
+                creation_time = iso8601.parse_date(creation_time).astimezone(local_tz).strftime('%Y-%m-%d %H:%M:%S') \
+                    if creation_time else ''
+                instance_name = instance.get('name')
+                instance_type = str(instance.get('machineType')).rsplit('/', 1)[1]
+                image_name = str(instance.get('disks')[0]['licenses'][0]).rsplit('/', 1)[1]
+                private_ip_address = instance.get('networkInterfaces')[0].get('networkIP')
+                public_ip_address = instance.get('networkInterfaces')[0]['accessConfigs'][0].get('natIP')
+                public_ip_address = public_ip_address if public_ip_address else ''
+                last_user = self._operations_get(operations, instance_id, 'user')
+                last_user = str(last_user).split('@', 1)[0] if last_user else ''
+                launch_time = self._operations_get(operations, instance_id, 'endTime')
+                launch_time = iso8601.parse_date(launch_time).astimezone(local_tz).strftime('%Y-%m-%d %H:%M:%S')\
+                    if launch_time else ''
+                uptime = ''
+                if instance_state == 'running':
+                    then = iso8601.parse_date(launch_time).astimezone(local_tz)
+                    seconds = self._date_diff(now, then)
+                    uptime = self._get_uptime(seconds)
+                excluded = False
+                i += 1
+                table.add_row([
+                    zone,
+                    instance_name,
+                    instance_type,
+                    image_name,
+                    instance_state,
+                    creation_time,
+                    launch_time,
+                    uptime,
+                    last_user,
+                    private_ip_address,
+                    public_ip_address,
+                    excluded
+                ])
+                if instance_state in states_dict:
+                    states_dict[instance_state] += 1
+                else:
+                    states_dict[instance_state] = 1
+        print(table)
+        out = ', '.join(['%s: %s' % (key, value) for (key, value) in sorted(states_dict.items())])
+        if len(out) > 0:
+            out = '(%s)' % out
+        else:
+            out = ''
+        print('Time: %s (%s) | Instances: %s %s' % (now.strftime('%Y-%m-%d %H:%M:%S'), str(local_tz), i, out))
+        if len(info_dict) > 0:
+            print()
+
+    def list_regions(self, disable_border=False, disable_header=False):
+        table = prettytable.PrettyTable(['Region'], border=not disable_border, header=not disable_header,
+                                        sortby='Region')
+        table.align = 'l'
+        for region in self._regions:
+            table.add_row([region])
+        print(table)
+
+
 class AZURE(WDCloud):
     def __init__(self, *args, **kwargs):
         super(AZURE, self).__init__(*args, **kwargs)
         print('%s module not implemented yet, exiting...' % self._cloud_provider.upper())
         exit(1)
 
-    def describe_instances(self):
+    def list(self):
         pass
 
-    def describe_regions(self):
-        pass
-
-
-class GCE(WDCloud):
-    def __init__(self, *args, **kwargs):
-        super(GCE, self).__init__(*args, **kwargs)
-        print('%s module not implemented yet, exiting...' % self._cloud_provider.upper())
-        exit(1)
-
-    def describe_instances(self):
-        pass
-
-    def describe_regions(self):
+    def list_regions(self):
         pass

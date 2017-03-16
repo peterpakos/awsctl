@@ -5,34 +5,32 @@
 # Author: Peter Pakos <peter.pakos@wandisco.com>
 
 from __future__ import print_function
-
 import argparse
 import os
 import sys
-
-import WDCloud
+from WDCloud import WDCloud
 
 
 class Main(object):
-    _version = '16.8.12'
+    _version = '17.3.16'
     _name = os.path.basename(sys.argv[0])
 
     def __init__(self):
         self._args = self._parse_args()
-        self._cloud = WDCloud.WDCloud.loader(self._args.cloud_provider, self._args.profile_name, self._args.region)
+        self._cloud = WDCloud.loader(self._args.cloud_provider, self._args.profile_name, self._args.region)
 
     def run(self):
-        if self._args.command == 'describe-instances':
-            self._cloud.describe_instances(disable_border=self._args.disable_border,
-                                           disable_header=self._args.disable_header,
-                                           state=self._args.state,
-                                           notify=self._args.notify,
-                                           stop=self._args.stop,
-                                           warning_threshold=self._args.warning_threshold * 3600,
-                                           alert_threshold=self._args.alert_threshold * 3600)
-        elif self._args.command == 'describe-regions':
-            self._cloud.describe_regions(disable_border=self._args.disable_border,
-                                         disable_header=self._args.disable_header)
+        if self._args.command == 'list':
+            self._cloud.list(disable_border=self._args.disable_border,
+                             disable_header=self._args.disable_header,
+                             state=self._args.state,
+                             notify=self._args.notify,
+                             stop=self._args.stop,
+                             warning_threshold=self._args.warning_threshold * 3600,
+                             alert_threshold=self._args.alert_threshold * 3600)
+        elif self._args.command == 'list-regions':
+            self._cloud.list_regions(disable_border=self._args.disable_border,
+                                     disable_header=self._args.disable_header)
         elif self._args.command == 'exclude':
             self._cloud.tag(instance_id=self._args.id,
                             key='EXCLUDE',
@@ -65,13 +63,13 @@ class Main(object):
 
         parser.add_argument('--version', action='version', version='%s %s' % (self._name, self._version))
         parser.add_argument('-c', '--cloud-provider', help='cloud provider (default: %(default)s)',
-                            dest='cloud_provider', choices=['aws', 'gce', 'azure'], default='aws')
+                            dest='cloud_provider', choices=['aws', 'gcp', 'azure'], default='aws')
         parser.add_argument('-p', '--profile-name', help='cloud profile name (default: %(default)s)',
                             dest='profile_name', default='default')
         parser.add_argument('-r', '--region', help='choose single region (default: all)', dest='region')
 
         subparsers = parser.add_subparsers(title='commands', dest='command')
-        parser_describe_instances = subparsers.add_parser('describe-instances', help='display list of instances')
+        parser_describe_instances = subparsers.add_parser('list', help='display list of instances')
         parser_describe_instances.add_argument('-b', '--disable-border', help='disable table border',
                                                action='store_true', dest='disable_border')
         parser_describe_instances.add_argument('-H', '--disable-header', help='disable table header',
@@ -92,7 +90,7 @@ class Main(object):
                                                help='instance auto stop & alert threshold (hours, default: %(default)s)'
                                                )
 
-        parser_describe_regions = subparsers.add_parser('describe-regions', help='display list of available regions')
+        parser_describe_regions = subparsers.add_parser('list-regions', help='display list of available regions')
         parser_describe_regions.add_argument('-b', '--disable-border', help='disable table border',
                                              action='store_true', dest='disable_border')
         parser_describe_regions.add_argument('-H', '--disable-header', help='disable table header',
