@@ -1,6 +1,6 @@
 # WANdisco Cloud module
 #
-# Version 17.3.16
+# Version 17.3.29
 #
 # Author: Peter Pakos <peter.pakos@wandisco.com>
 
@@ -33,6 +33,16 @@ class WDCloud(object):
             self._head = self._heads[profile_name]
         else:
             self._head = None
+        self._compute_engine = {
+            'AWS': 'EC2',
+            'GCP': 'GCE',
+            'AZURE': 'AZURE'
+        }
+        self._bp_url = {
+            'AWS': 'https://workspace.wandisco.com/display/IT/AWS+Best+Practices+at+WANdisco',
+            'GCP': 'https://workspace.wandisco.com/display/IT/GCP+Best+Practices+at+WANdisco',
+            'AZURE': 'https://workspace.wandisco.com/display/IT/AZURE+Best+Practices+at+WANdisco'
+        }
 
     @staticmethod
     def loader(cloud_provider, profile_name, region):
@@ -69,6 +79,162 @@ class WDCloud(object):
         diff = (date1 - date2)
         diff = (diff.microseconds + (diff.seconds + diff.days * 24 * 3600) * 10 ** 6) / 10 ** 6
         return diff
+
+    def _send_alert(self, mail_type, user, region_ids, name_dict, uptime_dict, warning_threshold, alert_threshold,
+                    stop=False):
+        profile = self._profile_name.upper()
+        user_name = user.split('.')[0].capitalize()
+        cloud = self._cloud_provider.upper()
+        engine = self._compute_engine[cloud]
+        bp_url = self._bp_url[cloud]
+        number = 0
+        table = prettytable.PrettyTable(['Region', 'Instance ID', 'Name', 'Uptime'])
+        table.align = 'l'
+        for region, ids in region_ids.items():
+            number += len(ids)
+            for iid in ids:
+                table.add_row([
+                    region,
+                    iid,
+                    name_dict[iid],
+                    uptime_dict[iid]
+                ])
+        s = ''
+        have = 'has'
+        if number > 1:
+            s = 's'
+            have = 'have'
+        sender = CONFIG.EMAIL_FROM
+        recipient = user + '@' + CONFIG.EMAIL_DOMAIN
+        cc_recipient = None
+        subject = None
+        message = None
+        if mail_type == 'info':
+            subject = '%s %s: %s running instances' % (cloud, profile, engine)
+            message = '''Hi %s,
+
+This is just a friendly reminder that you have %s running %s instance%s in %s %s account:
+
+%s
+
+Make sure any running instances are either STOPPED or TERMINATED before close of business.
+
+If you wish to keep your instances running for longer than %s hours, please raise a ticket using \
+<a href="https://helpdesk.wandisco.com">IT Helpdesk</a> so we can exclude them from reporting.
+
+Please note:
+<li>any unexcluded instances running for longer than %s hours will be reported to the respective head of department</li\
+><li>any unexcluded instances running for longer than %s hours will be automatically STOPPED.</li>
+For more information check our <a href="%s">%s Best Practices</a>.
+
+Thank you.
+''' % (
+                user_name,
+                number,
+                engine,
+                s,
+                cloud,
+                profile,
+                table,
+                warning_threshold / 3600,
+                warning_threshold / 3600,
+                alert_threshold / 3600,
+                bp_url,
+                cloud
+            )
+        elif mail_type == 'warning':
+            subject = '*WARNING* %s %s: %s running instances' % (cloud, profile, engine)
+            cc_recipient = self._head
+            if recipient in cc_recipient:
+                cc_recipient.remove(recipient)
+            if number > 1:
+                some_of_them = 'and either all or some of them'
+            else:
+                some_of_them = 'that'
+            message = '''Hi %s,
+
+You currently have %s %s instance%s in %s %s account %s %s been running for longer than %s hours:
+
+%s
+
+<strong>Please STOP or TERMINATE any instances that are no longer in use.</strong>
+
+If you wish to keep your instances running for longer than %s hours, please raise a ticket using \
+<a href="https://helpdesk.wandisco.com">IT Helpdesk</a> so we can exclude them from reporting.
+
+For more information check our <a href="%s">%s Best Practices</a>.
+
+Thank you.
+''' % (
+                user_name,
+                number,
+                engine,
+                s,
+                cloud,
+                profile,
+                some_of_them,
+                have,
+                warning_threshold / 3600,
+                table,
+                warning_threshold / 3600,
+                bp_url,
+                cloud
+            )
+        elif mail_type == 'critical':
+            subject = '*CRITICAL* %s %s: %s running instances' % (cloud, profile, engine)
+            cc_recipient = self._head
+            if recipient in cc_recipient:
+                cc_recipient.remove(recipient)
+            if stop:
+                stop_msg = '\n<strong>ANY INSTANCES RUNNING FOR LONGER THAN %s HOURS WILL BE STOPPED IMMEDIATELY!\
+</strong>\n\nPlease check your %s account and make sure there are no more offending instances.\n' % \
+                           ((alert_threshold / 3600), cloud)
+            else:
+                stop_msg = '\n<strong>PLEASE IMMEDIATELY STOP OR TERMINATE ANY INSTANCES THAT ARE NO LONGER IN USE!\
+    </strong>\n'
+            message = '''Hi %s,
+
+You currently have %s %s instance%s in %s %s account that %s been running for longer than %s hours:
+
+%s
+%s
+As per <a href="%s">%s Best Practices</a>, if \
+you wish to keep your instances running for more than %s hours, please raise a ticket using \
+<a href="https://helpdesk.wandisco.com">IT Helpdesk</a> so we can exclude them from reporting.
+
+Thank you.
+''' % (
+                user_name,
+                number,
+                engine,
+                s,
+                cloud,
+                profile,
+                have,
+                alert_threshold / 3600,
+                table,
+                stop_msg,
+                bp_url,
+                cloud,
+                warning_threshold / 3600
+            )
+        else:
+            print('We should not reach this part!')
+            exit(1)
+
+        message += '\n-- \nInfrastructure & IT Team'
+        cc = ''
+        if cc_recipient:
+            if type(cc_recipient) is list:
+                cc = ' (cc: %s)' % ', '.join(cc_recipient)
+            else:
+                cc = ' (cc: %s)' % cc_recipient
+        print('Sending %s email to %s%s... ' % (mail_type, recipient, cc), end='')
+        response = self._mail.send(sender, recipient, subject, message, html=True, cc=cc_recipient)
+        if response == 202:
+            print('SUCCESS')
+        else:
+            print('FAILURE')
 
 
 class AWS(WDCloud):
@@ -115,147 +281,6 @@ class AWS(WDCloud):
                     break
         return value
 
-    def _send_alert(self, mail_type, user, region_ids, name_dict, uptime_dict, warning_threshold, alert_threshold,
-                    stop=False):
-        number = 0
-        table = prettytable.PrettyTable(['Region', 'Instance ID', 'Name', 'Uptime'])
-        table.align = 'l'
-        for region, ids in region_ids.items():
-            number += len(ids)
-            for iid in ids:
-                table.add_row([
-                    region,
-                    iid,
-                    name_dict[iid],
-                    uptime_dict[iid]
-                ])
-        s = ''
-        have = 'has'
-        if number > 1:
-            s = 's'
-            have = 'have'
-        sender = 'Infrastructure & IT <infra@wandisco.com>'
-        recipient = user + '@wandisco.com'
-        cc_recipient = None
-        subject = None
-        message = None
-        if mail_type == 'info':
-            subject = 'AWS %s: EC2 running instances' % str(self._profile_name).upper()
-            message = '''Hi %s,
-
-This is just a friendly reminder that you have %s running EC2 instance%s in AWS %s account:
-
-%s
-
-Make sure any running instances are either STOPPED or TERMINATED before close of business.
-
-If you wish to keep your instances running for longer than %s hours, please raise a ticket using \
-<a href="http://helpdesk.wandisco.com">IT Helpdesk</a> so we can exclude them from reporting.
-
-Please note:
-<li>any unexcluded instances running for longer than %s hours will be reported to the respective head of department</li\
-><li>any unexcluded instances running for longer than %s hours will be automatically STOPPED.</li>
-For more information check our \
-<a href="https://workspace.wandisco.com/display/IT/AWS+Best+Practices+at+WANdisco">AWS Best Practices</a>.
-
-Thank you.
-''' % (
-                user.split('.')[0].capitalize(),
-                number,
-                s,
-                str(self._profile_name).upper(),
-                table,
-                warning_threshold / 3600,
-                warning_threshold / 3600,
-                alert_threshold / 3600
-            )
-        elif mail_type == 'warning':
-            subject = '*WARNING* AWS %s: EC2 running instances' % str(self._profile_name).upper()
-            cc_recipient = self._head
-            if recipient in cc_recipient:
-                cc_recipient.remove(recipient)
-            if number > 1:
-                some_of_them = 'and either all or some of them'
-            else:
-                some_of_them = 'that'
-            message = '''Hi %s,
-
-You currently have %s EC2 instance%s in AWS %s account %s %s been running for longer than %s hours:
-
-%s
-
-<strong>Please STOP or TERMINATE any instances that are no longer in use.</strong>
-
-If you wish to keep your instances running for longer than %s hours, please raise a ticket using \
-<a href="http://helpdesk.wandisco.com">IT Helpdesk</a> so we can exclude them from reporting.
-
-For more information check our \
-<a href="https://workspace.wandisco.com/display/IT/AWS+Best+Practices+at+WANdisco">AWS Best Practices</a>.
-
-Thank you.
-''' % (
-                user.split('.')[0].capitalize(),
-                number,
-                s,
-                str(self._profile_name).upper(),
-                some_of_them,
-                have,
-                warning_threshold / 3600,
-                table,
-                warning_threshold / 3600
-            )
-        elif mail_type == 'alert':
-            subject = '*ALERT* AWS %s: EC2 running instances' % str(self._profile_name).upper()
-            cc_recipient = self._head
-            if recipient in cc_recipient:
-                cc_recipient.remove(recipient)
-            if stop:
-                stop_msg = '\n<strong>ANY INSTANCES RUNNING FOR LONGER THAN %s HOURS WILL BE STOPPED IMMEDIATELY!\
-</strong>\n\nPlease check your AWS account and make sure there are no more offending instances.\n' % \
-                           (alert_threshold / 3600)
-            else:
-                stop_msg = '\n<strong>PLEASE IMMEDIATELY STOP OR TERMINATE ANY INSTANCES THAT ARE NO LONGER IN USE!\
-    </strong>\n'
-            message = '''Hi %s,
-
-You currently have %s EC2 instance%s in AWS %s account that %s been running for longer than %s hours:
-
-%s
-%s
-As per <a href="https://workspace.wandisco.com/display/IT/AWS+Best+Practices+at+WANdisco">AWS Best Practices</a>, if \
-you wish to keep your instances running for more than %s hours, please raise a ticket using \
-<a href="http://helpdesk.wandisco.com">IT Helpdesk</a> so we can exclude them from reporting.
-
-Thank you.
-''' % (
-                user.split('.')[0].capitalize(),
-                number,
-                s,
-                str(self._profile_name).upper(),
-                have,
-                alert_threshold / 3600,
-                table,
-                stop_msg,
-                warning_threshold / 3600
-            )
-        else:
-            print('We should not reach this part!')
-            exit(1)
-
-        message += '\n-- \nInfrastructure & IT Team'
-        cc = ''
-        if cc_recipient:
-            if type(cc_recipient) is list:
-                cc = ' (cc: %s)' % ', '.join(cc_recipient)
-            else:
-                cc = ' (cc: %s)' % cc_recipient
-        print('Sending %s email to %s%s... ' % (mail_type, recipient, cc), end='')
-        response = self._mail.send(sender, recipient, subject, message, html=True, cc=cc_recipient)
-        if response == 202:
-            print('SUCCESS')
-        else:
-            print('FAILURE')
-
     def list(self, disable_border=False, disable_header=False, state=None, notify=False, stop=False,
              warning_threshold=None, alert_threshold=None):
         if not state:
@@ -273,7 +298,7 @@ Thank you.
         stop_dict = {}
         info_dict = {}
         warning_dict = {}
-        alert_dict = {}
+        critical_dict = {}
         local_tz = tzlocal.get_localzone()
         now = local_tz.localize(datetime.datetime.now())
         for region in self._regions:
@@ -284,10 +309,10 @@ Thank you.
             }])
             for instance in instances:
                 i += 1
-                excluded = True if self._get_tag(instance.tags, 'EXCLUDE') is not None else False
+                excluded = True if self._get_tag(instance.tags, 'EXCLUDE') else False
                 image_name = ''
-                private_ip_address = instance.private_ip_address if instance.private_ip_address is not None else ''
-                public_ip_address = instance.public_ip_address if instance.public_ip_address is not None else ''
+                private_ip_address = instance.private_ip_address or ''
+                public_ip_address = instance.public_ip_address or ''
                 instance_state = instance.state['Name']
                 last_user = self._get_tag(instance.tags, 'Last_user') or ''
                 uptime = ''
@@ -315,7 +340,7 @@ Thank you.
                         info_dict[last_user][region].append(instance.id)
 
                         if seconds >= alert_threshold:
-                            alert_dict[last_user] = True
+                            critical_dict[last_user] = True
                         elif seconds >= warning_threshold:
                             warning_dict[last_user] = True
 
@@ -351,9 +376,10 @@ Thank you.
         print('Time: %s (%s) | Instances: %s %s' % (now.strftime('%Y-%m-%d %H:%M:%S'), str(local_tz), i, out))
         if len(info_dict) > 0:
             print()
+
         for user, region_ids in info_dict.items():
-            if user in alert_dict:
-                mail_type = 'alert'
+            if user in critical_dict:
+                mail_type = 'critical'
             elif user in warning_dict:
                 mail_type = 'warning'
             else:
@@ -553,11 +579,20 @@ class GCP(WDCloud):
         except HttpAccessTokenRefreshError as e:
             print('Auth Error (%s)' % e)
             exit(1)
+
         for zone in zones['items']:
             self._zones.append(zone['name'])
             region = str(zone['name']).rsplit('-', 1)[0]
             if region not in self._regions:
                 self._regions.append(region)
+
+        if self._region:
+            if self._region not in self._regions:
+                print('Region must be one of the following:\n- %s' %
+                      '\n- '.join(self._regions))
+                exit(1)
+            else:
+                self._regions = [self._region]
 
     @staticmethod
     def _operations_get(operations, instance_id, resource):
@@ -573,7 +608,7 @@ class GCP(WDCloud):
              warning_threshold=None, alert_threshold=None):
         if not state:
             state = ['running', 'staging', 'provisioning', 'stopping', 'terminated']
-        table = prettytable.PrettyTable(['Zone', 'Name', 'Type', 'Image', 'State', 'Creation time',
+        table = prettytable.PrettyTable(['Region', 'Name', 'Type', 'Image', 'State', 'Creation time',
                                          'Launch time', 'Uptime', 'User', 'Private IP', 'Public IP',
                                          'Exclude'],
                                         border=not disable_border, header=not disable_header, reversesort=True,
@@ -581,10 +616,18 @@ class GCP(WDCloud):
         table.align = 'l'
         i = 0
         states_dict = {}
+        uptime_dict = {}
+        name_dict = {}
+        stop_dict = {}
         info_dict = {}
+        warning_dict = {}
+        critical_dict = {}
         local_tz = tzlocal.get_localzone()
         now = local_tz.localize(datetime.datetime.now())
         for zone in self._zones:
+            region = str(zone).rsplit('-', 1)[0]
+            if region not in self._regions:
+                continue
             instances = self._compute.instances().list(project=self._project, zone=zone).execute()
             if not instances.get('items'):
                 continue
@@ -603,21 +646,39 @@ class GCP(WDCloud):
                 image_name = str(instance.get('disks')[0]['licenses'][0]).rsplit('/', 1)[1]
                 private_ip_address = instance.get('networkInterfaces')[0].get('networkIP')
                 public_ip_address = instance.get('networkInterfaces')[0]['accessConfigs'][0].get('natIP')
-                public_ip_address = public_ip_address if public_ip_address else ''
+                public_ip_address = public_ip_address or ''
                 last_user = self._operations_get(operations, instance_id, 'user')
                 last_user = str(last_user).split('@', 1)[0] if last_user else ''
-                launch_time = self._operations_get(operations, instance_id, 'endTime')
-                launch_time = iso8601.parse_date(launch_time).astimezone(local_tz).strftime('%Y-%m-%d %H:%M:%S')\
-                    if launch_time else ''
+                launch_time_src = self._operations_get(operations, instance_id, 'endTime')
+                launch_time_src = iso8601.parse_date(launch_time_src).astimezone(local_tz)
+                launch_time = launch_time_src.strftime('%Y-%m-%d %H:%M:%S')\
+                    if launch_time_src else ''
                 uptime = ''
-                if instance_state == 'running':
-                    then = iso8601.parse_date(launch_time).astimezone(local_tz)
-                    seconds = self._date_diff(now, then)
-                    uptime = self._get_uptime(seconds)
                 excluded = False
+
+                if instance_state == 'running':
+                    seconds = self._date_diff(now, launch_time_src)
+                    uptime = self._get_uptime(seconds)
+                    if seconds >= alert_threshold and not excluded:
+                        if region not in stop_dict:
+                            stop_dict[region] = []
+                        stop_dict[region].append(instance_id)
+                    if last_user and notify and not excluded:
+                        name_dict[instance_id] = instance_name
+                        uptime_dict[instance_id] = uptime
+                        if last_user not in info_dict:
+                            info_dict[last_user] = {}
+                        if region not in info_dict[last_user]:
+                            info_dict[last_user][region] = []
+                        info_dict[last_user][region].append(instance_id)
+
+                        if seconds >= alert_threshold:
+                            critical_dict[last_user] = True
+                        elif seconds >= warning_threshold:
+                            warning_dict[last_user] = True
                 i += 1
                 table.add_row([
-                    zone,
+                    region,
                     instance_name,
                     instance_type,
                     image_name,
@@ -643,6 +704,22 @@ class GCP(WDCloud):
         print('Time: %s (%s) | Instances: %s %s' % (now.strftime('%Y-%m-%d %H:%M:%S'), str(local_tz), i, out))
         if len(info_dict) > 0:
             print()
+
+        for user, region_ids in info_dict.items():
+            if user in critical_dict:
+                mail_type = 'critical'
+            elif user in warning_dict:
+                mail_type = 'warning'
+            else:
+                mail_type = 'info'
+            self._send_alert(mail_type,
+                             user,
+                             region_ids,
+                             name_dict,
+                             uptime_dict,
+                             warning_threshold,
+                             alert_threshold,
+                             stop)
 
     def list_regions(self, disable_border=False, disable_header=False):
         table = prettytable.PrettyTable(['Region'], border=not disable_border, header=not disable_header,
