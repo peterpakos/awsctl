@@ -1,6 +1,6 @@
 # WANdisco Cloud module
 #
-# Version 17.3.29
+# Version 17.3.31
 #
 # Author: Peter Pakos <peter.pakos@wandisco.com>
 
@@ -17,6 +17,8 @@ from CONFIG import CONFIG
 from oauth2client.client import GoogleCredentials, HttpAccessTokenRefreshError
 from googleapiclient import discovery
 import iso8601
+from azure.common.credentials import ServicePrincipalCredentials
+from azure.mgmt.resource.subscriptions import SubscriptionClient
 
 
 class WDCloud(object):
@@ -53,9 +55,13 @@ class WDCloud(object):
     def list(self):
         pass
 
-    @abc.abstractmethod
-    def list_regions(self):
-        pass
+    def list_regions(self, disable_border=False, disable_header=False):
+        table = prettytable.PrettyTable(['Region'], border=not disable_border, header=not disable_header,
+                                        sortby='Region')
+        table.align = 'l'
+        for region in self._regions:
+            table.add_row([region])
+        print(table)
 
     @staticmethod
     def _get_uptime(seconds):
@@ -236,6 +242,15 @@ Thank you.
         else:
             print('FAILURE')
 
+    def _check_region(self):
+        if self._region:
+            if self._region not in self._regions:
+                print('Region must be one of the following:\n- %s' %
+                      '\n- '.join(self._regions))
+                exit(1)
+            else:
+                self._regions = [self._region]
+
 
 class AWS(WDCloud):
     def __init__(self, *args, **kwargs):
@@ -261,15 +276,11 @@ class AWS(WDCloud):
         except botocore.exceptions.ClientError as err:
             print(err)
             exit(1)
+
         for region in regions['Regions']:
             self._regions.append(region['RegionName'])
-        if self._region:
-            if self._region not in self._regions:
-                print('Region must be one of the following:\n- %s' %
-                      '\n- '.join(self._regions))
-                exit(1)
-            else:
-                self._regions = [self._region]
+
+        self._check_region()
 
     @staticmethod
     def _get_tag(list_a, search_key):
@@ -407,14 +418,6 @@ class AWS(WDCloud):
             return True
         else:
             return False
-
-    def list_regions(self, disable_border=False, disable_header=False):
-        table = prettytable.PrettyTable(['Region'], border=not disable_border, header=not disable_header,
-                                        sortby='Region')
-        table.align = 'l'
-        for region in self._regions:
-            table.add_row([region])
-        print(table)
 
     def _create_tag(self, region, resource, key, value):
         ec2c = self._session.client('ec2', region_name=region)
@@ -586,13 +589,7 @@ class GCP(WDCloud):
             if region not in self._regions:
                 self._regions.append(region)
 
-        if self._region:
-            if self._region not in self._regions:
-                print('Region must be one of the following:\n- %s' %
-                      '\n- '.join(self._regions))
-                exit(1)
-            else:
-                self._regions = [self._region]
+        self._check_region()
 
     @staticmethod
     def _operations_get(operations, instance_id, resource):
@@ -721,23 +718,21 @@ class GCP(WDCloud):
                              alert_threshold,
                              stop)
 
-    def list_regions(self, disable_border=False, disable_header=False):
-        table = prettytable.PrettyTable(['Region'], border=not disable_border, header=not disable_header,
-                                        sortby='Region')
-        table.align = 'l'
-        for region in self._regions:
-            table.add_row([region])
-        print(table)
-
 
 class AZURE(WDCloud):
     def __init__(self, *args, **kwargs):
         super(AZURE, self).__init__(*args, **kwargs)
-        print('%s module not implemented yet, exiting...' % self._cloud_provider.upper())
-        exit(1)
+        subscription_id = CONFIG.AZURE_SUBSCRIPTION_ID
+        credentials = ServicePrincipalCredentials(
+            client_id=CONFIG.AZURE_CLIENT_ID,
+            secret=CONFIG.AZURE_SECRET,
+            tenant=CONFIG.AZURE_TENANT
+        )
+        client = SubscriptionClient(credentials)
+        for location in client.subscriptions.list_locations(subscription_id):
+            self._regions.append(location.name)
+
+        self._check_region()
 
     def list(self):
-        pass
-
-    def list_regions(self):
         pass
