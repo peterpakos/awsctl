@@ -1,6 +1,6 @@
 # WANdisco Cloud module
 #
-# Version 17.3.31
+# Version 17.4.26
 #
 # Author: Peter Pakos <peter.pakos@wandisco.com>
 
@@ -19,6 +19,9 @@ from googleapiclient import discovery
 import iso8601
 from azure.common.credentials import ServicePrincipalCredentials
 from azure.mgmt.resource.subscriptions import SubscriptionClient
+from azure.mgmt.resource import ResourceManagementClient
+from azure.mgmt.compute import ComputeManagementClient
+from azure.mgmt.network import NetworkManagementClient
 
 
 class WDCloud(object):
@@ -408,7 +411,7 @@ class AWS(WDCloud):
                 print('\nStopping instances in region %s (%s)... %s' % (
                     region,
                     ','.join(iids),
-                    'success' if self._stop_instance(region, iids) else 'fail')
+                    'SUCCESS' if self._stop_instance(region, iids) else 'FAIL')
                       )
 
     def _stop_instance(self, region, instance_ids):
@@ -722,17 +725,145 @@ class GCP(WDCloud):
 class AZURE(WDCloud):
     def __init__(self, *args, **kwargs):
         super(AZURE, self).__init__(*args, **kwargs)
-        subscription_id = CONFIG.AZURE_SUBSCRIPTION_ID
-        credentials = ServicePrincipalCredentials(
+
+        self._subscription_id = CONFIG.AZURE_SUBSCRIPTION_ID
+        self._credentials = ServicePrincipalCredentials(
             client_id=CONFIG.AZURE_CLIENT_ID,
             secret=CONFIG.AZURE_SECRET,
             tenant=CONFIG.AZURE_TENANT
         )
-        client = SubscriptionClient(credentials)
-        for location in client.subscriptions.list_locations(subscription_id):
+        self._subscription_client = SubscriptionClient(self._credentials)
+        self._compute_client = ComputeManagementClient(self._credentials, self._subscription_id)
+        self._resource_client = ResourceManagementClient(self._credentials, self._subscription_id)
+        self._network_client = NetworkManagementClient(self._credentials, self._subscription_id)
+
+        self._resource_groups = []
+        for resource_group in self._resource_client.resource_groups.list():
+            self._resource_groups.append(resource_group)
+
+        for location in self._subscription_client.subscriptions.list_locations(self._subscription_id):
             self._regions.append(location.name)
 
         self._check_region()
 
-    def list(self):
-        pass
+    def list(self, disable_border=False, disable_header=False, state=None, notify=False, stop=False,
+             warning_threshold=None, alert_threshold=None):
+        if not state:
+            state = ['running', 'stopped', 'starting', 'stopping']
+        table = prettytable.PrettyTable(['Region', 'Resource Group', 'Name', 'Type', 'Image', 'State',
+                                         'Launch time', 'Uptime', 'User', 'Private IP', 'Public IP',
+                                         'Exclude'],
+                                        border=not disable_border, header=not disable_header, reversesort=True,
+                                        sortby='Launch time')
+        table.align = 'l'
+        i = 0
+        states_dict = {}
+        uptime_dict = {}
+        name_dict = {}
+        stop_dict = {}
+        info_dict = {}
+        warning_dict = {}
+        critical_dict = {}
+        local_tz = tzlocal.get_localzone()
+        now = local_tz.localize(datetime.datetime.now())
+
+        for resource_group in self._resource_groups:
+            instances = self._compute_client.virtual_machines.list(resource_group.name)
+
+            for instance in instances:
+                region = instance.location
+                if region not in self._regions:
+                    continue
+
+                instance_data = self._compute_client.virtual_machines.get(resource_group.name, instance.name,
+                                                                          expand='instanceView')
+                try:
+                    instance_state = str(instance_data.instance_view.statuses[1].display_status).split('VM ')[1]
+                except IndexError:
+                    instance_state = 'starting'
+                if instance_state == 'deallocated':
+                    instance_state = 'stopped'
+                elif instance_state == 'deallocating':
+                    instance_state = 'stopping'
+
+                if instance_state not in state:
+                    if len(state) > 1:
+                        print('UNKNOWN INSTANCE STATE: %s\n' % instance_state)
+                    continue
+
+                try:
+                    launch_time_src = instance_data.instance_view.disks[0].statuses[0].time.astimezone(local_tz)
+                    launch_time = launch_time_src.strftime('%Y-%m-%d %H:%M:%S')
+                except AttributeError:
+                    launch_time_src = ''
+                    launch_time = ''
+
+                instance_type = instance_data.hardware_profile.vm_size
+                image_name = instance_data.storage_profile.image_reference.offer + ' ' + \
+                    instance_data.storage_profile.image_reference.sku
+
+                nic_group = instance_data.network_profile.network_interfaces[0].id.split('/')[4]
+                nic_name = instance_data.network_profile.network_interfaces[0].id.split('/')[8]
+
+                net_interface = self._network_client.network_interfaces.get(nic_group, nic_name)
+                private_ip_address = net_interface.ip_configurations[0].private_ip_address
+
+                try:
+                    ip_group = net_interface.ip_configurations[0].public_ip_address.id.split('/')[4]
+                    ip_name = net_interface.ip_configurations[0].public_ip_address.id.split('/')[8]
+                    public_ip_address = self._network_client.public_ip_addresses.get(ip_group, ip_name).ip_address or ''
+                except AttributeError:
+                    public_ip_address = ''
+
+                last_user = 'unknown'
+                uptime = ''
+                excluded = False
+
+                if instance_state == 'running' and launch_time_src:
+                    seconds = self._date_diff(now, launch_time_src)
+                    uptime = self._get_uptime(seconds)
+                    if seconds >= alert_threshold and not excluded:
+                        if region not in stop_dict:
+                            stop_dict[region] = []
+                        stop_dict[region].append(instance.id)
+                    if last_user and notify and not excluded:
+                        name_dict[instance.id] = instance.name
+                        uptime_dict[instance.id] = uptime
+                        if last_user not in info_dict:
+                            info_dict[last_user] = {}
+                        if region not in info_dict[last_user]:
+                            info_dict[last_user][region] = []
+                        info_dict[last_user][region].append(instance.id)
+
+                        if seconds >= alert_threshold:
+                            critical_dict[last_user] = True
+                        elif seconds >= warning_threshold:
+                            warning_dict[last_user] = True
+                i += 1
+                table.add_row([
+                    instance.location,
+                    resource_group.name,
+                    instance.name,
+                    instance_type,
+                    image_name,
+                    instance_state,
+                    launch_time,
+                    uptime,
+                    last_user,
+                    private_ip_address,
+                    public_ip_address,
+                    excluded
+                ])
+                if instance_state in states_dict:
+                    states_dict[instance_state] += 1
+                else:
+                    states_dict[instance_state] = 1
+        print(table)
+        out = ', '.join(['%s: %s' % (key, value) for (key, value) in sorted(states_dict.items())])
+        if len(out) > 0:
+            out = '(%s)' % out
+        else:
+            out = ''
+        print('Time: %s (%s) | Instances: %s %s' % (now.strftime('%Y-%m-%d %H:%M:%S'), str(local_tz), i, out))
+        if len(info_dict) > 0:
+            print()
