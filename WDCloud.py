@@ -1,6 +1,6 @@
 # WANdisco Cloud module
 #
-# Version 17.4.26
+# Version 17.4.28
 #
 # Author: Peter Pakos <peter.pakos@wandisco.com>
 
@@ -22,6 +22,7 @@ from azure.mgmt.resource.subscriptions import SubscriptionClient
 from azure.mgmt.resource import ResourceManagementClient
 from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.network import NetworkManagementClient
+from azure.monitor import MonitorClient
 
 
 class WDCloud(object):
@@ -736,6 +737,7 @@ class AZURE(WDCloud):
         self._compute_client = ComputeManagementClient(self._credentials, self._subscription_id)
         self._resource_client = ResourceManagementClient(self._credentials, self._subscription_id)
         self._network_client = NetworkManagementClient(self._credentials, self._subscription_id)
+        self._monitor_client = MonitorClient(self._credentials, self._subscription_id)
 
         self._resource_groups = []
         for resource_group in self._resource_client.resource_groups.list():
@@ -749,8 +751,8 @@ class AZURE(WDCloud):
     def list(self, disable_border=False, disable_header=False, state=None, notify=False, stop=False,
              warning_threshold=None, alert_threshold=None):
         if not state:
-            state = ['running', 'stopped', 'starting', 'stopping']
-        table = prettytable.PrettyTable(['Region', 'Resource Group', 'Name', 'Type', 'Image', 'State',
+            state = ['running', 'stopped', 'starting', 'stopping', 'busy']
+        table = prettytable.PrettyTable(['Region', 'RG', 'Name', 'Type', 'Image', 'State',
                                          'Launch time', 'Uptime', 'User', 'Private IP', 'Public IP',
                                          'Exclude'],
                                         border=not disable_border, header=not disable_header, reversesort=True,
@@ -775,12 +777,36 @@ class AZURE(WDCloud):
                 if region not in self._regions:
                     continue
 
+                last_user = 'unknown'
+                start = datetime.datetime.now().date() - datetime.timedelta(days=7)
+                afilter = " and ".join([
+                    "eventTimestamp ge '%s'" % start,
+                    "eventChannels eq 'Admin, Operation'",
+                    "resourceUri eq '%s'" % instance.id
+                ])
+                select = ",".join([
+                    "caller",
+                    "eventName",
+                    "operationName",
+                    "eventTimestamp"
+                ])
+                activity_logs = self._monitor_client.activity_logs.list(
+                    filter=afilter,
+                    select=select
+                )
+
+                for log in activity_logs:
+                    if "virtualMachines/start/action" in log.operation_name.value or \
+                       "virtualMachines/write" in log.operation_name.value:
+                        last_user = log.caller.split('@', 1)[0]
+                        break
+
                 instance_data = self._compute_client.virtual_machines.get(resource_group.name, instance.name,
                                                                           expand='instanceView')
                 try:
                     instance_state = str(instance_data.instance_view.statuses[1].display_status).split('VM ')[1]
                 except IndexError:
-                    instance_state = 'starting'
+                    instance_state = 'busy'
                 if instance_state == 'deallocated':
                     instance_state = 'stopped'
                 elif instance_state == 'deallocating':
@@ -815,7 +841,6 @@ class AZURE(WDCloud):
                 except AttributeError:
                     public_ip_address = ''
 
-                last_user = 'unknown'
                 uptime = ''
                 excluded = False
 
