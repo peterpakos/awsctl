@@ -1,6 +1,6 @@
 # WANdisco Cloud module
 #
-# Version 17.4.28
+# Version 17.5.10
 #
 # Author: Peter Pakos <peter.pakos@wandisco.com>
 
@@ -69,11 +69,17 @@ class WDCloud(object):
 
     @staticmethod
     def _get_uptime(seconds):
-        d = divmod(seconds, 86400)
+        y = divmod(seconds, 86400*364)
+        w = divmod(y[1], 86400*7)
+        d = divmod(w[1], 86400)
         h = divmod(d[1], 3600)
         m = divmod(h[1], 60)
         s = m[1]
         uptime = []
+        if y[0] > 0:
+            uptime.append('%dy' % y[0])
+        if w[0] > 0:
+            uptime.append('%dw' % w[0])
         if d[0] > 0:
             uptime.append('%dd' % d[0])
         if h[0] > 0:
@@ -796,8 +802,8 @@ class AZURE(WDCloud):
                 )
 
                 for log in activity_logs:
-                    if "virtualMachines/start/action" in log.operation_name.value or \
-                       "virtualMachines/write" in log.operation_name.value:
+                    if log.caller and ("virtualMachines/start/action" in log.operation_name.value or
+                                       "virtualMachines/write" in log.operation_name.value):
                         last_user = log.caller.split('@', 1)[0]
                         break
 
@@ -842,7 +848,7 @@ class AZURE(WDCloud):
                     public_ip_address = ''
 
                 uptime = ''
-                excluded = False
+                excluded = True if instance.tags.get('EXCLUDE') else False
 
                 if instance_state == 'running' and launch_time_src:
                     seconds = self._date_diff(now, launch_time_src)
@@ -864,6 +870,7 @@ class AZURE(WDCloud):
                             critical_dict[last_user] = True
                         elif seconds >= warning_threshold:
                             warning_dict[last_user] = True
+
                 i += 1
                 table.add_row([
                     instance.location,
@@ -892,3 +899,47 @@ class AZURE(WDCloud):
         print('Time: %s (%s) | Instances: %s %s' % (now.strftime('%Y-%m-%d %H:%M:%S'), str(local_tz), i, out))
         if len(info_dict) > 0:
             print()
+
+    def _create_tag(self, resource_group, instance, key, value):
+        self._compute_client.virtual_machines.create_or_update(resource_group, instance.name, {
+            'location': instance.location,
+            'tags': {
+                key: value
+            }
+        }).wait()
+        return True
+
+    def _delete_tag(self, resource_group, instance, key):
+        self._compute_client.virtual_machines.create_or_update(resource_group, instance.name, {
+            'location': instance.location,
+            'tags': {
+                key: ''
+            },
+        }).wait()
+        return True
+
+    def tag(self, instance_id, key, value='', delete=False):
+        i = 0
+        resource_group = self._profile_name.upper()
+        instances = self._compute_client.virtual_machines.list(resource_group)
+
+        for instance in instances:
+            if instance.name in instance_id:
+                i += 1
+                if delete:
+                    print('Instance ID %s found in region %s, deleting tag \'%s\': ' %
+                          (instance.name, instance.location, key), end='')
+                    response = self._delete_tag(resource_group, instance, key)
+                else:
+                    print('Instance ID %s found in region %s, creating tag \'%s\': ' %
+                          (instance.name, instance.location, key), end='')
+                    response = self._create_tag(resource_group, instance, key, value)
+                if response:
+                    print('OK')
+                else:
+                    print('FAIL')
+                if len(instance_id) == i:
+                    return
+
+        if i == 0:
+            print('Instance ID %s not found in any region' % (', '.join(instance_id)))

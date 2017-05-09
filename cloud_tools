@@ -12,7 +12,7 @@ from WDCloud import WDCloud
 
 
 class Main(object):
-    _version = '17.3.16'
+    _version = '17.5.10'
     _name = os.path.basename(sys.argv[0])
 
     def __init__(self):
@@ -65,7 +65,7 @@ class Main(object):
         parser.add_argument('-c', '--cloud-provider', help='cloud provider (default: %(default)s)',
                             dest='cloud_provider', choices=['aws', 'gcp', 'azure'], default='aws')
         parser.add_argument('-p', '--profile-name', help='cloud profile name (default: %(default)s)',
-                            dest='profile_name', default='default')
+                            dest='profile_name', default='infra')
         parser.add_argument('-r', '--region', help='choose single region (default: all)', dest='region')
 
         subparsers = parser.add_subparsers(title='commands', dest='command')
