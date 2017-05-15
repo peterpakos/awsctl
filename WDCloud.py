@@ -656,10 +656,11 @@ class GCP(WDCloud):
                 public_ip_address = public_ip_address or ''
                 last_user = self._operations_get(operations, instance_id, 'user')
                 last_user = str(last_user).split('@', 1)[0] if last_user else ''
+                launch_time = ''
                 launch_time_src = self._operations_get(operations, instance_id, 'endTime')
-                launch_time_src = iso8601.parse_date(launch_time_src).astimezone(local_tz)
-                launch_time = launch_time_src.strftime('%Y-%m-%d %H:%M:%S')\
-                    if launch_time_src else ''
+                if launch_time_src:
+                    launch_time_src = iso8601.parse_date(launch_time_src).astimezone(local_tz)
+                    launch_time = launch_time_src.strftime('%Y-%m-%d %H:%M:%S')
                 uptime = ''
                 excluded = False
 
