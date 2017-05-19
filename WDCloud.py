@@ -1,6 +1,6 @@
 # WANdisco Cloud module
 #
-# Version 17.5.10
+# Version 17.5.19
 #
 # Author: Peter Pakos <peter.pakos@wandisco.com>
 
@@ -23,36 +23,35 @@ from azure.mgmt.resource import ResourceManagementClient
 from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.network import NetworkManagementClient
 from azure.monitor import MonitorClient
+from string import Template
 
 
 class WDCloud(object):
     __metaclass__ = abc.ABCMeta
 
     def __init__(self, cloud_provider, profile_name, region):
-        self._cloud_provider = cloud_provider
+
+        self._cloud_names = {
+            'aws': 'AWS',
+            'gcp': 'GCP',
+            'azure': 'Azure'
+        }
+
+        self._cloud_provider = self._cloud_names[cloud_provider]
         self._profile_name = profile_name
         self._region = region
         self._regions = []
         self._mail = WDMail()
-        self._heads = CONFIG.HEADS
-        if profile_name in self._heads:
-            self._head = self._heads[profile_name]
-        else:
-            self._head = None
-        self._compute_engine = {
-            'AWS': 'EC2',
-            'GCP': 'GCE',
-            'AZURE': 'AZURE'
-        }
+
         self._bp_url = {
             'AWS': 'https://workspace.wandisco.com/display/IT/AWS+Best+Practices+at+WANdisco',
             'GCP': 'https://workspace.wandisco.com/display/IT/GCP+Best+Practices+at+WANdisco',
-            'AZURE': 'https://workspace.wandisco.com/display/IT/AZURE+Best+Practices+at+WANdisco'
+            'Azure': 'https://workspace.wandisco.com/display/IT/Azure+Best+Practices+at+WANdisco'
         }
 
     @staticmethod
     def loader(cloud_provider, profile_name, region):
-        classes = {'aws': AWS, 'azure': AZURE, 'gcp': GCP}
+        classes = {'aws': AWS, 'azure': Azure, 'gcp': GCP}
         return classes[cloud_provider](cloud_provider, profile_name, region)
 
     @abc.abstractmethod
@@ -96,157 +95,105 @@ class WDCloud(object):
         diff = (diff.microseconds + (diff.seconds + diff.days * 24 * 3600) * 10 ** 6) / 10 ** 6
         return diff
 
-    def _send_alert(self, mail_type, user, region_ids, name_dict, uptime_dict, warning_threshold, alert_threshold,
-                    stop=False):
-        profile = self._profile_name.upper()
+    def _send_alert(self, mail_type, user, region_ids, name_dict, uptime_dict, warning_threshold, critical_threshold,
+                    stop=False, dept=None, rg_dict=None):
         user_name = user.split('.')[0].capitalize()
-        cloud = self._cloud_provider.upper()
-        engine = self._compute_engine[cloud]
-        bp_url = self._bp_url[cloud]
+        profiles = dept if dept else [self._profile_name.upper()]
+
         number = 0
-        table = prettytable.PrettyTable(['Region', 'Instance ID', 'Name', 'Uptime'])
+
+        if self._cloud_provider == 'Azure':
+            table = prettytable.PrettyTable(['Region', 'RG', 'Name', 'Uptime'])
+            for region, ids in region_ids.items():
+                number += len(ids)
+                for iid in ids:
+                    table.add_row([
+                        region,
+                        rg_dict[iid],
+                        name_dict[iid],
+                        uptime_dict[iid]
+                    ])
+        else:
+            table = prettytable.PrettyTable(['Region', 'Instance ID', 'Name', 'Uptime'])
+            for region, ids in region_ids.items():
+                number += len(ids)
+                for iid in ids:
+                    table.add_row([
+                        region,
+                        iid,
+                        name_dict[iid],
+                        uptime_dict[iid]
+                    ])
         table.align = 'l'
-        for region, ids in region_ids.items():
-            number += len(ids)
-            for iid in ids:
-                table.add_row([
-                    region,
-                    iid,
-                    name_dict[iid],
-                    uptime_dict[iid]
-                ])
-        s = ''
-        have = 'has'
+
         if number > 1:
             s = 's'
             have = 'have'
+        else:
+            s = ''
+            have = 'has'
+
+        if len(profiles) > 1:
+            ss = 's'
+        else:
+            ss = ''
+
+        if number > 1:
+            some_of_them = 'and either all or some of them'
+        else:
+            some_of_them = 'that'
+
         sender = CONFIG.EMAIL_FROM
         recipient = user + '@' + CONFIG.EMAIL_DOMAIN
-        cc_recipient = None
-        subject = None
-        message = None
-        if mail_type == 'info':
-            subject = '%s %s: %s running instances' % (cloud, profile, engine)
-            message = '''Hi %s,
 
-This is just a friendly reminder that you have %s running %s instance%s in %s %s account:
-
-%s
-
-Make sure any running instances are either STOPPED or TERMINATED before close of business.
-
-If you wish to keep your instances running for longer than %s hours, please raise a ticket using \
-<a href="https://helpdesk.wandisco.com">IT Helpdesk</a> so we can exclude them from reporting.
-
-Please note:
-<li>any unexcluded instances running for longer than %s hours will be reported to the respective head of department</li\
-><li>any unexcluded instances running for longer than %s hours will be automatically STOPPED.</li>
-For more information check our <a href="%s">%s Best Practices</a>.
-
-Thank you.
-''' % (
-                user_name,
-                number,
-                engine,
-                s,
-                cloud,
-                profile,
-                table,
-                warning_threshold / 3600,
-                warning_threshold / 3600,
-                alert_threshold / 3600,
-                bp_url,
-                cloud
-            )
-        elif mail_type == 'warning':
-            subject = '*WARNING* %s %s: %s running instances' % (cloud, profile, engine)
-            cc_recipient = self._head
+        cc_recipient = []
+        if mail_type in ['warning', 'critical']:
+            for profile in profiles:
+                cc_recipient += CONFIG.HEADS[profile.lower()]
             if recipient in cc_recipient:
                 cc_recipient.remove(recipient)
-            if number > 1:
-                some_of_them = 'and either all or some of them'
-            else:
-                some_of_them = 'that'
-            message = '''Hi %s,
 
-You currently have %s %s instance%s in %s %s account %s %s been running for longer than %s hours:
-
-%s
-
-<strong>Please STOP or TERMINATE any instances that are no longer in use.</strong>
-
-If you wish to keep your instances running for longer than %s hours, please raise a ticket using \
-<a href="https://helpdesk.wandisco.com">IT Helpdesk</a> so we can exclude them from reporting.
-
-For more information check our <a href="%s">%s Best Practices</a>.
-
-Thank you.
-''' % (
-                user_name,
-                number,
-                engine,
-                s,
-                cloud,
-                profile,
-                some_of_them,
-                have,
-                warning_threshold / 3600,
-                table,
-                warning_threshold / 3600,
-                bp_url,
-                cloud
-            )
-        elif mail_type == 'critical':
-            subject = '*CRITICAL* %s %s: %s running instances' % (cloud, profile, engine)
-            cc_recipient = self._head
-            if recipient in cc_recipient:
-                cc_recipient.remove(recipient)
-            if stop:
-                stop_msg = '\n<strong>ANY INSTANCES RUNNING FOR LONGER THAN %s HOURS WILL BE STOPPED IMMEDIATELY!\
-</strong>\n\nPlease check your %s account and make sure there are no more offending instances.\n' % \
-                           ((alert_threshold / 3600), cloud)
-            else:
-                stop_msg = '\n<strong>PLEASE IMMEDIATELY STOP OR TERMINATE ANY INSTANCES THAT ARE NO LONGER IN USE!\
-    </strong>\n'
-            message = '''Hi %s,
-
-You currently have %s %s instance%s in %s %s account that %s been running for longer than %s hours:
-
-%s
-%s
-As per <a href="%s">%s Best Practices</a>, if \
-you wish to keep your instances running for more than %s hours, please raise a ticket using \
-<a href="https://helpdesk.wandisco.com">IT Helpdesk</a> so we can exclude them from reporting.
-
-Thank you.
-''' % (
-                user_name,
-                number,
-                engine,
-                s,
-                cloud,
-                profile,
-                have,
-                alert_threshold / 3600,
-                table,
-                stop_msg,
-                bp_url,
-                cloud,
-                warning_threshold / 3600
-            )
-        else:
-            print('We should not reach this part!')
-            exit(1)
-
-        message += '\n-- \nInfrastructure & IT Team'
-        cc = ''
         if cc_recipient:
-            if type(cc_recipient) is list:
-                cc = ' (cc: %s)' % ', '.join(cc_recipient)
-            else:
-                cc = ' (cc: %s)' % cc_recipient
+            cc = ' (cc: %s)' % ', '.join(cc_recipient)
+        else:
+            cc = ''
+
+        subject = '*%s* %s %s: running instances' % (mail_type.upper(), self._cloud_provider, '/'.join(profiles))
+
+        if stop:
+            stop_msg = '\nANY INSTANCES RUNNING FOR LONGER THAN %s HOURS WILL BE STOPPED IMMEDIATELY!\
+        \n\nPlease check your %s account and make sure there are no more offending instances.\n' % \
+                       ((critical_threshold / 3600), self._cloud_provider)
+        else:
+            stop_msg = '\nPLEASE IMMEDIATELY STOP OR TERMINATE ANY INSTANCES THAT ARE NO LONGER IN USE!\n'
+
+        template = open('%s/templates/%s.txt' % (os.path.dirname(os.path.realpath(__file__)), mail_type))
+        template = Template(template.read())
+        message = template.substitute({
+            'user_name': user_name,
+            'number': number,
+            's': s,
+            'cloud': self._cloud_provider,
+            'profile': '/'.join(profiles),
+            'ss': ss,
+            'table': table,
+            'warning_threshold': warning_threshold / 3600,
+            'critical_threshold': critical_threshold / 3600,
+            'bp_url': self._bp_url[self._cloud_provider],
+            'some_of_them': some_of_them,
+            'stop_msg': stop_msg,
+            'have': have,
+        })
+
         print('Sending %s email to %s%s... ' % (mail_type, recipient, cc), end='')
-        response = self._mail.send(sender, recipient, subject, message, html=True, cc=cc_recipient)
+        response = self._mail.send(
+            sender=sender,
+            recipients=recipient,
+            subject=subject,
+            message=message,
+            html=True,
+            cc=cc_recipient
+        )
         if response == 202:
             print('SUCCESS')
         else:
@@ -303,7 +250,7 @@ class AWS(WDCloud):
         return value
 
     def list(self, disable_border=False, disable_header=False, state=None, notify=False, stop=False,
-             warning_threshold=None, alert_threshold=None):
+             warning_threshold=None, critical_threshold=None):
         if not state:
             state = ['running', 'pending', 'shutting-down', 'stopped', 'stopping', 'terminated']
         table = prettytable.PrettyTable(['Zone', 'ID', 'Name', 'Type', 'Image', 'State',
@@ -346,7 +293,7 @@ class AWS(WDCloud):
                     seconds = self._date_diff(now, then)
                     uptime = self._get_uptime(seconds)
 
-                    if seconds >= alert_threshold and not excluded:
+                    if seconds >= critical_threshold and not excluded:
                         if region not in stop_dict:
                             stop_dict[region] = []
                         stop_dict[region].append(instance.id)
@@ -360,7 +307,7 @@ class AWS(WDCloud):
                             info_dict[last_user][region] = []
                         info_dict[last_user][region].append(instance.id)
 
-                        if seconds >= alert_threshold:
+                        if seconds >= critical_threshold:
                             critical_dict[last_user] = True
                         elif seconds >= warning_threshold:
                             warning_dict[last_user] = True
@@ -411,7 +358,7 @@ class AWS(WDCloud):
                              name_dict,
                              uptime_dict,
                              warning_threshold,
-                             alert_threshold,
+                             critical_threshold,
                              stop)
         if stop and len(stop_dict) > 0:
             for region, iids in stop_dict.items():
@@ -612,7 +559,7 @@ class GCP(WDCloud):
         return None
 
     def list(self, disable_border=False, disable_header=False, state=None, notify=False, stop=False,
-             warning_threshold=None, alert_threshold=None):
+             warning_threshold=None, critical_threshold=None):
         if not state:
             state = ['running', 'staging', 'provisioning', 'stopping', 'terminated']
         table = prettytable.PrettyTable(['Region', 'Name', 'Type', 'Image', 'State', 'Creation time',
@@ -667,7 +614,7 @@ class GCP(WDCloud):
                 if instance_state == 'running':
                     seconds = self._date_diff(now, launch_time_src)
                     uptime = self._get_uptime(seconds)
-                    if seconds >= alert_threshold and not excluded:
+                    if seconds >= critical_threshold and not excluded:
                         if region not in stop_dict:
                             stop_dict[region] = []
                         stop_dict[region].append(instance_id)
@@ -680,7 +627,7 @@ class GCP(WDCloud):
                             info_dict[last_user][region] = []
                         info_dict[last_user][region].append(instance_id)
 
-                        if seconds >= alert_threshold:
+                        if seconds >= critical_threshold:
                             critical_dict[last_user] = True
                         elif seconds >= warning_threshold:
                             warning_dict[last_user] = True
@@ -726,13 +673,13 @@ class GCP(WDCloud):
                              name_dict,
                              uptime_dict,
                              warning_threshold,
-                             alert_threshold,
+                             critical_threshold,
                              stop)
 
 
-class AZURE(WDCloud):
+class Azure(WDCloud):
     def __init__(self, *args, **kwargs):
-        super(AZURE, self).__init__(*args, **kwargs)
+        super(Azure, self).__init__(*args, **kwargs)
 
         self._subscription_id = CONFIG.AZURE_SUBSCRIPTION_ID
         self._credentials = ServicePrincipalCredentials(
@@ -748,7 +695,7 @@ class AZURE(WDCloud):
 
         self._resource_groups = []
         for resource_group in self._resource_client.resource_groups.list():
-            self._resource_groups.append(resource_group)
+            self._resource_groups.append(resource_group.name)
 
         for location in self._subscription_client.subscriptions.list_locations(self._subscription_id):
             self._regions.append(location.name)
@@ -756,7 +703,7 @@ class AZURE(WDCloud):
         self._check_region()
 
     def list(self, disable_border=False, disable_header=False, state=None, notify=False, stop=False,
-             warning_threshold=None, alert_threshold=None):
+             warning_threshold=None, critical_threshold=None):
         if not state:
             state = ['running', 'stopped', 'starting', 'stopping', 'busy']
         table = prettytable.PrettyTable(['Region', 'RG', 'Name', 'Type', 'Image', 'State',
@@ -773,11 +720,14 @@ class AZURE(WDCloud):
         info_dict = {}
         warning_dict = {}
         critical_dict = {}
+        dept_dict = {}
+        rg_dict = {}
         local_tz = tzlocal.get_localzone()
         now = local_tz.localize(datetime.datetime.now())
 
         for resource_group in self._resource_groups:
-            instances = self._compute_client.virtual_machines.list(resource_group.name)
+
+            instances = self._compute_client.virtual_machines.list(resource_group)
 
             for instance in instances:
                 region = instance.location
@@ -808,7 +758,7 @@ class AZURE(WDCloud):
                         last_user = log.caller.split('@', 1)[0]
                         break
 
-                instance_data = self._compute_client.virtual_machines.get(resource_group.name, instance.name,
+                instance_data = self._compute_client.virtual_machines.get(resource_group, instance.name,
                                                                           expand='instanceView')
                 try:
                     instance_state = str(instance_data.instance_view.statuses[1].display_status).split('VM ')[1]
@@ -849,25 +799,35 @@ class AZURE(WDCloud):
                     public_ip_address = ''
 
                 uptime = ''
-                excluded = True if instance.tags.get('EXCLUDE') else False
+                excluded = False
+
+                if instance.tags:
+                    excluded = True if instance.tags.get('EXCLUDE') else False
 
                 if instance_state == 'running' and launch_time_src:
                     seconds = self._date_diff(now, launch_time_src)
                     uptime = self._get_uptime(seconds)
-                    if seconds >= alert_threshold and not excluded:
+
+                    if seconds >= critical_threshold and not excluded:
                         if region not in stop_dict:
                             stop_dict[region] = []
                         stop_dict[region].append(instance.id)
+
                     if last_user and notify and not excluded:
-                        name_dict[instance.id] = instance.name
-                        uptime_dict[instance.id] = uptime
+                        if last_user not in dept_dict:
+                            dept_dict[last_user] = []
+                        if resource_group not in dept_dict[last_user]:
+                            dept_dict[last_user].append(resource_group)
+                        rg_dict[instance.name] = resource_group
+                        name_dict[instance.name] = instance.name
+                        uptime_dict[instance.name] = uptime
                         if last_user not in info_dict:
                             info_dict[last_user] = {}
                         if region not in info_dict[last_user]:
                             info_dict[last_user][region] = []
-                        info_dict[last_user][region].append(instance.id)
+                        info_dict[last_user][region].append(instance.name)
 
-                        if seconds >= alert_threshold:
+                        if seconds >= critical_threshold:
                             critical_dict[last_user] = True
                         elif seconds >= warning_threshold:
                             warning_dict[last_user] = True
@@ -875,7 +835,7 @@ class AZURE(WDCloud):
                 i += 1
                 table.add_row([
                     instance.location,
-                    resource_group.name,
+                    resource_group,
                     instance.name,
                     instance_type,
                     image_name,
@@ -900,6 +860,26 @@ class AZURE(WDCloud):
         print('Time: %s (%s) | Instances: %s %s' % (now.strftime('%Y-%m-%d %H:%M:%S'), str(local_tz), i, out))
         if len(info_dict) > 0:
             print()
+
+        for user, region_ids in info_dict.items():
+            if user in critical_dict:
+                mail_type = 'critical'
+            elif user in warning_dict:
+                mail_type = 'warning'
+            else:
+                mail_type = 'info'
+            self._send_alert(
+                mail_type=mail_type,
+                user=user,
+                region_ids=region_ids,
+                name_dict=name_dict,
+                uptime_dict=uptime_dict,
+                warning_threshold=warning_threshold,
+                critical_threshold=critical_threshold,
+                stop=stop,
+                dept=dept_dict[user],
+                rg_dict=rg_dict
+            )
 
     def _create_tag(self, resource_group, instance, key, value):
         self._compute_client.virtual_machines.create_or_update(resource_group, instance.name, {

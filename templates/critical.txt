@@ -1,0 +1,12 @@
+Hi $user_name,
+
+You currently have $number instance${s} in $cloud $profile account${ss} that $have been running for longer than $critical_threshold hours:
+
+$table
+$stop_msg
+As per our $cloud Best Practices, if you wish to keep your instances running for more than $warning_threshold hours, please raise a ticket at https://helpdesk.wandisco.com and we will exclude them from reporting.
+
+Thank you.
+
+--
+Infrastructure & IT Team

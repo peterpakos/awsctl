@@ -1,0 +1,20 @@
+Hi $user_name,
+
+This is just a friendly reminder that you have $number running instance${s} in $cloud $profile account${ss}:
+
+$table
+
+Make sure any running instances are either STOPPED or TERMINATED before close of business.
+
+If you wish to keep your instances running for longer than $warning_threshold hours, please raise a ticket at https://helpdesk.wandisco.com and we will exclude them from reporting.
+
+Please note:
+- any unexcluded instances running for longer than $warning_threshold hours will be reported to the respective head of department
+- any unexcluded instances running for longer than $critical_threshold hours will be automatically STOPPED.
+
+For more information check our $cloud Best Practices at $bp_url.
+
+Thank you.
+
+--
+Infrastructure & IT Team

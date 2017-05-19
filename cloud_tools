@@ -12,7 +12,7 @@ from WDCloud import WDCloud
 
 
 class Main(object):
-    _version = '17.5.10'
+    _version = '17.5.19'
     _name = os.path.basename(sys.argv[0])
 
     def __init__(self):
@@ -27,7 +27,7 @@ class Main(object):
                              notify=self._args.notify,
                              stop=self._args.stop,
                              warning_threshold=self._args.warning_threshold * 3600,
-                             alert_threshold=self._args.alert_threshold * 3600)
+                             critical_threshold=self._args.critical_threshold * 3600)
         elif self._args.command == 'list-regions':
             self._cloud.list_regions(disable_border=self._args.disable_border,
                                      disable_header=self._args.disable_header)
@@ -85,8 +85,8 @@ class Main(object):
                                                dest='warning_threshold', default=12, type=int)
         parser_describe_instances.add_argument('-S', '--stop', help='stop instances running longer than set threshold',
                                                action='store_true', dest='stop')
-        parser_describe_instances.add_argument('-T', '--alert-threshold',
-                                               dest='alert_threshold', default=24, type=int,
+        parser_describe_instances.add_argument('-T', '--critical-threshold',
+                                               dest='critical_threshold', default=24, type=int,
                                                help='instance auto stop & alert threshold (hours, default: %(default)s)'
                                                )
 

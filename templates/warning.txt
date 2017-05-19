@@ -1,0 +1,16 @@
+Hi $user_name,
+
+You currently have $number instance${s} in $cloud $profile account${ss} $some_of_them $have been running for longer than $warning_threshold hours:
+
+$table
+
+Please STOP or TERMINATE any instances that are no longer in use.
+
+If you wish to keep your instances running, please raise a ticket at https://helpdesk.wandisco.com and we will exclude them from reporting.
+
+For more information check our $cloud Best Practices at $bp_url.
+
+Thank you.
+
+--
+Infrastructure & IT Team

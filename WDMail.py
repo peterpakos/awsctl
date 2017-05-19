@@ -1,6 +1,6 @@
 # WANdisco Mail module
 #
-# Version 16.8.10a
+# Version 17.5.18
 #
 # Author: Peter Pakos <peter.pakos@wandisco.com>
 
@@ -8,6 +8,7 @@ from __future__ import print_function
 import sendgrid
 import urllib2
 import os
+import cgi
 
 
 class WDMail(object):
@@ -26,12 +27,21 @@ class WDMail(object):
         os.environ['SENDGRID_API_KEY'] = self._api_key
         self._sg = sendgrid.SendGridAPIClient(apikey=os.environ.get('SENDGRID_API_KEY'))
 
-    def send(self, sender, recipients, subject, message, html=False, cc=None):
+    def send(self, sender, recipients, subject, message, html=False, cc=None, font_size=None):
+        if html:
+            message = cgi.escape(message)
+
+        if font_size:
+            style = ' style="font-size:%spx"' % font_size
+        else:
+            style = ''
+
         if type(recipients) is not list:
             recipientsl = []
             if recipients is not None:
                 recipientsl.append(recipients)
             recipients = recipientsl
+
         if type(cc) is not list:
             ccl = []
             if cc is not None:
@@ -44,9 +54,9 @@ class WDMail(object):
             content_type = 'text/html'
             content += '''
 <html>
-<body>
+<body%s>
 <pre>
-'''
+''' % style
         content += message
 
         if html:
