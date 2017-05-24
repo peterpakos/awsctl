@@ -1,6 +1,6 @@
 # WANdisco Cloud module
 #
-# Version 17.5.19
+# Version 17.5.24
 #
 # Author: Peter Pakos <peter.pakos@wandisco.com>
 
@@ -23,6 +23,7 @@ from azure.mgmt.resource import ResourceManagementClient
 from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.network import NetworkManagementClient
 from azure.monitor import MonitorClient
+from msrestazure.azure_exceptions import CloudError
 from string import Template
 
 
@@ -360,6 +361,7 @@ class AWS(WDCloud):
                              warning_threshold,
                              critical_threshold,
                              stop)
+
         if stop and len(stop_dict) > 0:
             for region, iids in stop_dict.items():
                 print('\nStopping instances in region %s (%s)... %s' % (
@@ -774,13 +776,6 @@ class Azure(WDCloud):
                         print('UNKNOWN INSTANCE STATE: %s\n' % instance_state)
                     continue
 
-                try:
-                    launch_time_src = instance_data.instance_view.disks[0].statuses[0].time.astimezone(local_tz)
-                    launch_time = launch_time_src.strftime('%Y-%m-%d %H:%M:%S')
-                except AttributeError:
-                    launch_time_src = ''
-                    launch_time = ''
-
                 instance_type = instance_data.hardware_profile.vm_size
                 image_name = instance_data.storage_profile.image_reference.offer + ' ' + \
                     instance_data.storage_profile.image_reference.sku
@@ -800,18 +795,26 @@ class Azure(WDCloud):
 
                 uptime = ''
                 excluded = False
+                launch_time = ''
 
                 if instance.tags:
                     excluded = True if instance.tags.get('EXCLUDE') else False
 
-                if instance_state == 'running' and launch_time_src:
+                if instance_state == 'running':
+                    try:
+                        launch_time_src = instance_data.instance_view.disks[0].statuses[0].time.astimezone(local_tz)
+                        launch_time = launch_time_src.strftime('%Y-%m-%d %H:%M:%S')
+                    except AttributeError:
+                        launch_time_src = ''
+                        launch_time = ''
+
                     seconds = self._date_diff(now, launch_time_src)
                     uptime = self._get_uptime(seconds)
 
                     if seconds >= critical_threshold and not excluded:
-                        if region not in stop_dict:
-                            stop_dict[region] = []
-                        stop_dict[region].append(instance.id)
+                        if resource_group not in stop_dict:
+                            stop_dict[resource_group] = []
+                        stop_dict[resource_group].append(instance.name)
 
                     if last_user and notify and not excluded:
                         if last_user not in dept_dict:
@@ -881,23 +884,34 @@ class Azure(WDCloud):
                 rg_dict=rg_dict
             )
 
+        if stop and len(stop_dict) > 0:
+            for rg, vms in stop_dict.items():
+                print('\nStopping instances in Resource Group %s (%s)... %s' % (
+                    rg,
+                    ','.join(vms),
+                    'SUCCESS' if self._stop_instance(rg, vms) else 'FAIL'))
+
     def _create_tag(self, resource_group, instance, key, value):
-        self._compute_client.virtual_machines.create_or_update(resource_group, instance.name, {
-            'location': instance.location,
-            'tags': {
-                key: value
-            }
-        }).wait()
-        return True
+        try:
+            self._compute_client.virtual_machines.create_or_update(resource_group, instance.name, {
+                'location': instance.location,
+                'tags': {key: value}
+            }).wait()
+        except CloudError:
+            return False
+        else:
+            return True
 
     def _delete_tag(self, resource_group, instance, key):
-        self._compute_client.virtual_machines.create_or_update(resource_group, instance.name, {
-            'location': instance.location,
-            'tags': {
-                key: ''
-            },
-        }).wait()
-        return True
+        try:
+            self._compute_client.virtual_machines.create_or_update(resource_group, instance.name, {
+                'location': instance.location,
+                'tags': {key: ''}
+            }).wait()
+        except CloudError:
+            return False
+        else:
+            return True
 
     def tag(self, instance_id, key, value='', delete=False):
         i = 0
@@ -924,3 +938,8 @@ class Azure(WDCloud):
 
         if i == 0:
             print('Instance ID %s not found in any region' % (', '.join(instance_id)))
+
+    def _stop_instance(self, rg, vms):
+        for vm in vms:
+            self._compute_client.virtual_machines.power_off(rg, vm).wait()
+        return True
