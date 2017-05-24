@@ -1,6 +1,6 @@
 # WANdisco Cloud module
 #
-# Version 17.5.24
+# Version 17.5.24a
 #
 # Author: Peter Pakos <peter.pakos@wandisco.com>
 
@@ -941,5 +941,5 @@ class Azure(WDCloud):
 
     def _stop_instance(self, rg, vms):
         for vm in vms:
-            self._compute_client.virtual_machines.power_off(rg, vm).wait()
+            self._compute_client.virtual_machines.deallocate(rg, vm).wait()
         return True
