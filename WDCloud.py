@@ -1,8 +1,21 @@
-# WANdisco Cloud module
-#
-# Version 17.5.24a
-#
-# Author: Peter Pakos <peter.pakos@wandisco.com>
+# -*- coding: utf-8 -*-
+"""This module implements interaction with cloud providers.
+
+Copyright (C) 2017 Peter Pakos <peter.pakos@wandisco.com>
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+"""
 
 from __future__ import print_function
 import os
@@ -12,8 +25,7 @@ import boto3
 import botocore.exceptions
 import prettytable
 import tzlocal
-from WDMail import WDMail
-from CONFIG import CONFIG
+from string import Template
 from oauth2client.client import GoogleCredentials, HttpAccessTokenRefreshError
 from googleapiclient import discovery
 import iso8601
@@ -24,10 +36,12 @@ from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.network import NetworkManagementClient
 from azure.monitor import MonitorClient
 from msrestazure.azure_exceptions import CloudError
-from string import Template
+from WDMail import WDMail
+from CONFIG import CONFIG
 
 
 class WDCloud(object):
+    VERSION = '1.0.0'
     __metaclass__ = abc.ABCMeta
 
     def __init__(self, cloud_provider, profile_name, region):

@@ -1,0 +1,12 @@
+language: python
+python:
+  - "2.7"
+before_script:
+  - mv CONFIG_SAMPLE.py CONFIG.py
+script:
+  - pep8 --max-line-length=120 cloud_tools lambda_function *.py
+  - ./cloud_tools -h
+notifications:
+  email:
+    recipients:
+      - peter@pakos.uk

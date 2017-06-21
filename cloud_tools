@@ -1,8 +1,22 @@
 #!/usr/bin/env python
-#
-# A tool to manipulate clouds
-#
-# Author: Peter Pakos <peter.pakos@wandisco.com>
+# -*- coding: utf-8 -*-
+"""A tool to manipulate clouds
+
+Copyright (C) 2017 Peter Pakos <peter.pakos@wandisco.com>
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+"""
 
 from __future__ import print_function
 import argparse
@@ -12,8 +26,7 @@ from WDCloud import WDCloud
 
 
 class Main(object):
-    _version = '17.5.19'
-    _name = os.path.basename(sys.argv[0])
+    VERSION = '1.0.0'
 
     def __init__(self):
         self._args = self._parse_args()
@@ -49,9 +62,6 @@ class Main(object):
         else:
             self.die('Command %s not implemented yet' % self._args.command)
 
-    def _display_version(self):
-        print('%s version %s' % (self._name, self._version))
-
     @staticmethod
     def die(message=None, code=1):
         if message is not None:
@@ -61,7 +71,8 @@ class Main(object):
     def _parse_args(self):
         parser = argparse.ArgumentParser(description='A tool to manipulate clouds')
 
-        parser.add_argument('--version', action='version', version='%s %s' % (self._name, self._version))
+        parser.add_argument('--version', action='version', version='%s %s' % (os.path.basename(sys.argv[0]),
+                                                                              self.VERSION))
         parser.add_argument('-c', '--cloud-provider', help='cloud provider (default: %(default)s)',
                             dest='cloud_provider', choices=['aws', 'gcp', 'azure'], default='aws')
         parser.add_argument('-p', '--profile-name', help='cloud profile name (default: %(default)s)',
@@ -85,10 +96,9 @@ class Main(object):
                                                dest='warning_threshold', default=12, type=int)
         parser_describe_instances.add_argument('-S', '--stop', help='stop instances running longer than set threshold',
                                                action='store_true', dest='stop')
-        parser_describe_instances.add_argument('-T', '--critical-threshold',
-                                               dest='critical_threshold', default=24, type=int,
-                                               help='instance auto stop & alert threshold (hours, default: %(default)s)'
-                                               )
+        parser_describe_instances.add_argument('-T', '--critical-threshold', dest='critical_threshold',
+                                               default=24, type=int,
+                                               help='auto stop & alert threshold (hours, default: %(default)s)')
 
         parser_describe_regions = subparsers.add_parser('list-regions', help='display list of available regions')
         parser_describe_regions.add_argument('-b', '--disable-border', help='disable table border',
@@ -119,7 +129,6 @@ class Main(object):
 
 if __name__ == '__main__':
     try:
-        main = Main()
-        main.run()
+        Main().run()
     except KeyboardInterrupt:
         print('\nCancelling...')
