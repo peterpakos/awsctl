@@ -41,7 +41,7 @@ from CONFIG import CONFIG
 
 
 class WDCloud(object):
-    VERSION = '1.0.0'
+    VERSION = '1.0.1'
     __metaclass__ = abc.ABCMeta
 
     def __init__(self, cloud_provider, profile_name, region):
@@ -164,7 +164,8 @@ class WDCloud(object):
         cc_recipient = []
         if mail_type in ['warning', 'critical']:
             for profile in profiles:
-                cc_recipient += CONFIG.HEADS[profile.lower()]
+                if profile.lower() in CONFIG.HEADS:
+                    cc_recipient += CONFIG.HEADS[profile.lower()]
             if recipient in cc_recipient:
                 cc_recipient.remove(recipient)
 
