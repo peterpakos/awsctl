@@ -4,6 +4,8 @@
 
 Copyright (C) 2017 Peter Pakos <peter.pakos@wandisco.com>
 
+Version 1.0.0
+
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
 the Free Software Foundation, either version 3 of the License, or
@@ -69,7 +71,49 @@ def lambda_handler(event, context):
     for event in events:
         instance_ids = []
 
-        if event['eventName'] == 'RunJobFlow':
+        # print(json.dumps(event, indent=2))
+        if event['eventName'] == 'RequestSpotInstances':
+            print('Processing event %s...' % event['eventName'])
+            region = event['awsRegion']
+            user = event['requestParameters']['launchSpecification']['keyName']
+            ec2 = session.client('ec2', region_name=region)
+            try:
+                for item in event['responseElements']['spotInstanceRequestSet']['items']:
+                    instance_ids.append(item['spotInstanceRequestId'])
+            except TypeError as err:
+                print(err)
+                continue
+
+            try:
+                print('Tagging in progress... Last_user: %s (SSH Key Name), Request ID: %s' %
+                      (user, ', '.join(instance_ids)))
+                response = ec2.create_tags(Resources=instance_ids, Tags=[{'Key': 'Last_user', 'Value': user}])
+            except botocore.exceptions.ClientError as err:
+                print(err)
+                continue
+            print('HTTP response: %s' % response['ResponseMetadata']['HTTPStatusCode'])
+
+            try:
+                print('Requesting details about spot instance requests: %s' % ', '.join(instance_ids))
+                response = ec2.describe_spot_instance_requests(SpotInstanceRequestIds=instance_ids)
+            except botocore.exceptions.ClientError as err:
+                print(err)
+                continue
+            print('HTTP response: %s' % response['ResponseMetadata']['HTTPStatusCode'])
+
+            instance_ids = []
+            for request in response['SpotInstanceRequests']:
+                instance_ids.append(request['InstanceId'])
+            try:
+                print('Tagging in progress... Last_user: %s (SSH Key Name), Instances: %s' %
+                      (user, ', '.join(instance_ids)))
+                response = ec2.create_tags(Resources=instance_ids, Tags=[{'Key': 'Last_user', 'Value': user}])
+            except botocore.exceptions.ClientError as err:
+                print(err)
+                continue
+            print('HTTP response: %s' % response['ResponseMetadata']['HTTPStatusCode'])
+
+        elif event['eventName'] == 'RunJobFlow':
             print('Processing event %s...' % event['eventName'])
             region = event['awsRegion']
             user = event['userIdentity']['userName']
@@ -120,7 +164,6 @@ def lambda_handler(event, context):
             print('HTTP response: %s' % response['ResponseMetadata']['HTTPStatusCode'])
 
         elif event['eventName'] in ['RunInstances', 'StartInstances', 'StopInstances']:
-            print("Received event: " + json.dumps(event, indent=2))
             print('Processing event %s...' % event['eventName'])
             region = event['awsRegion']
             if event['userAgent'] in ['autoscaling.amazonaws.com', 'elasticmapreduce.amazonaws.com']:
