@@ -41,7 +41,7 @@ from CONFIG import CONFIG
 
 
 class WDCloud(object):
-    VERSION = '1.0.1'
+    VERSION = '1.0.2'
     __metaclass__ = abc.ABCMeta
 
     def __init__(self, cloud_provider, profile_name, region):
@@ -628,7 +628,7 @@ class GCP(WDCloud):
                 uptime = ''
                 excluded = False
 
-                if instance_state == 'running':
+                if instance_state == 'running' and launch_time_src:
                     seconds = self._date_diff(now, launch_time_src)
                     uptime = self._get_uptime(seconds)
                     if seconds >= critical_threshold and not excluded:
@@ -751,7 +751,7 @@ class Azure(WDCloud):
                 if region not in self._regions:
                     continue
 
-                last_user = 'unknown'
+                last_user = ''
                 start = datetime.datetime.now().date() - datetime.timedelta(days=7)
                 afilter = " and ".join([
                     "eventTimestamp ge '%s'" % start,
