@@ -1,5 +1,6 @@
 pep8
 boto3
+botocore
 prettytable
 tzlocal
 oauth2client
@@ -11,3 +12,4 @@ azure-mgmt-resource
 azure-mgmt-compute
 azure-mgmt-network
 azure-monitor
+msrestazure

@@ -19,6 +19,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from __future__ import print_function
 import os
+import sys
 import abc
 import datetime
 import boto3
@@ -41,7 +42,7 @@ from CONFIG import CONFIG
 
 
 class WDCloud(object):
-    VERSION = '1.0.2'
+    VERSION = '1.0.3'
     __metaclass__ = abc.ABCMeta
 
     def __init__(self, cloud_provider, profile_name, region):
@@ -223,6 +224,14 @@ class WDCloud(object):
                 exit(1)
             else:
                 self._regions = [self._region]
+
+    @abc.abstractmethod
+    def sg(self, *args, **kwargs):
+        pass
+
+    @abc.abstractmethod
+    def public_buckets(self, *args, **kwargs):
+        pass
 
 
 class AWS(WDCloud):
@@ -534,6 +543,50 @@ class AWS(WDCloud):
                 else:
                     print('OK')
 
+    def public_buckets(self, disable_border=False, disable_header=False):
+        s3c = self._session.client('s3')
+
+        table = prettytable.PrettyTable(['Public S3 bucket', 'ACL'],
+                                        border=not disable_border, header=not disable_header, reversesort=False,
+                                        sortby='Public S3 bucket')
+        table.align = 'l'
+
+        public_acl_indicator = 'http://acs.amazonaws.com/groups/global/AllUsers'
+        public_buckets = {}
+
+        list_bucket_response = None
+        try:
+            list_bucket_response = s3c.list_buckets()
+        except botocore.exceptions.ClientError as e:
+            print(e)
+            exit(1)
+
+        for bucket_dict in list_bucket_response.get('Buckets'):
+            bucket = bucket_dict.get('Name')
+            bucket_acl_response = None
+            try:
+                bucket_acl_response = s3c.get_bucket_acl(Bucket=bucket)
+            except botocore.exceptions.ClientError as e:
+                print(e)
+                exit(1)
+
+            for grant in bucket_acl_response.get('Grants'):
+                for (k, v) in grant.items():
+                    if k == 'Permission' and grant.get('Grantee').get('URI') == public_acl_indicator:
+                        if bucket_dict.get('Name') not in public_buckets:
+                            public_buckets[bucket] = [v]
+                        else:
+                            if v not in public_buckets[bucket_dict.get('Name')]:
+                                public_buckets[bucket].append(v)
+
+        if public_buckets:
+            for bucket, acl in public_buckets.items():
+                table.add_row([bucket, ', '.join(acl)])
+
+        print(table)
+        print('[%s] Public buckets: %s/%s' %
+              (self._profile_name, len(public_buckets), len(list_bucket_response.get('Buckets'))))
+
 
 class GCP(WDCloud):
     def __init__(self, *args, **kwargs):
@@ -692,6 +745,14 @@ class GCP(WDCloud):
                              warning_threshold,
                              critical_threshold,
                              stop)
+
+    def sg(self, *args, **kwargs):
+        print('Command not implemented yet', file=sys.stderr)
+        exit(1)
+
+    def public_buckets(self, *args, **kwargs):
+        print('Command not implemented yet', file=sys.stderr)
+        exit(1)
 
 
 class Azure(WDCloud):
@@ -958,3 +1019,11 @@ class Azure(WDCloud):
         for vm in vms:
             self._compute_client.virtual_machines.deallocate(rg, vm).wait()
         return True
+
+    def sg(self, *args, **kwargs):
+        print('Command not implemented yet', file=sys.stderr)
+        exit(1)
+
+    def public_buckets(self, *args, **kwargs):
+        print('Command not implemented yet', file=sys.stderr)
+        exit(1)
