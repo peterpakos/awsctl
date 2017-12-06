@@ -42,7 +42,7 @@ from CONFIG import CONFIG
 
 
 class WDCloud(object):
-    VERSION = '1.0.3'
+    VERSION = '1.0.4'
     __metaclass__ = abc.ABCMeta
 
     def __init__(self, cloud_provider, profile_name, region):
@@ -783,7 +783,7 @@ class Azure(WDCloud):
     def list(self, disable_border=False, disable_header=False, state=None, notify=False, stop=False,
              warning_threshold=None, critical_threshold=None):
         if not state:
-            state = ['running', 'stopped', 'starting', 'stopping', 'busy']
+            state = ['running', 'stopped', 'starting', 'stopping', 'busy', 'generalized']
         table = prettytable.PrettyTable(['Region', 'RG', 'Name', 'Type', 'Image', 'State',
                                          'Launch time', 'Uptime', 'User', 'Private IP', 'Public IP',
                                          'Exclude'],
