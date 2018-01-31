@@ -6,10 +6,10 @@ tzlocal
 oauth2client
 google-api-python-client
 iso8601
-sendgrid
 azure-common
 azure-mgmt-resource
 azure-mgmt-compute
 azure-mgmt-network
 azure-monitor
 msrestazure
+ppmail

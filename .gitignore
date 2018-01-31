@@ -1,5 +1,4 @@
 .idea
-*.api
 *.pyc
 CONFIG.py
 *.json

@@ -13,4 +13,4 @@ For more information check our $cloud Best Practices at $bp_url.
 Thank you.
 
 --
-Infrastructure & IT Team
+Infrastructure & IT Team (@it)

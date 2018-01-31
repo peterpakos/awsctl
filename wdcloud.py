@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 """This module implements interaction with cloud providers.
 
-Copyright (C) 2017 Peter Pakos <peter.pakos@wandisco.com>
+Author: Peter Pakos <peter.pakos@wandisco.com>
+
+Copyright (C) 2017 WANdisco
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -37,12 +39,12 @@ from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.network import NetworkManagementClient
 from azure.monitor import MonitorClient
 from msrestazure.azure_exceptions import CloudError
-from WDMail import WDMail
+from ppmail import Mailer
 from CONFIG import CONFIG
 
 
 class WDCloud(object):
-    VERSION = '1.0.4'
+    VERSION = '1.1.0'
     __metaclass__ = abc.ABCMeta
 
     def __init__(self, cloud_provider, profile_name, region):
@@ -57,7 +59,7 @@ class WDCloud(object):
         self._profile_name = profile_name
         self._region = region
         self._regions = []
-        self._mail = WDMail()
+        self._mailer = Mailer(slack=True)
 
         self._bp_url = {
             'AWS': 'https://workspace.wandisco.com/display/IT/AWS+Best+Practices+at+WANdisco',
@@ -175,7 +177,7 @@ class WDCloud(object):
         else:
             cc = ''
 
-        subject = '*%s* %s %s: running instances' % (mail_type.upper(), self._cloud_provider, '/'.join(profiles))
+        subject = '%s %s %s: running instances' % (mail_type.upper(), self._cloud_provider, '/'.join(profiles))
 
         if stop:
             stop_msg = '\nANY INSTANCES RUNNING FOR LONGER THAN %s HOURS WILL BE STOPPED IMMEDIATELY!\
@@ -202,16 +204,16 @@ class WDCloud(object):
             'have': have,
         })
 
-        print('Sending %s email to %s%s... ' % (mail_type, recipient, cc), end='')
-        response = self._mail.send(
+        print('Sending %s notification to %s%s... ' % (mail_type, recipient, cc), end='')
+        response = self._mailer.send(
             sender=sender,
             recipients=recipient,
             subject=subject,
             message=message,
-            html=True,
+            code=True,
             cc=cc_recipient
         )
-        if response == 202:
+        if response:
             print('SUCCESS')
         else:
             print('FAILURE')

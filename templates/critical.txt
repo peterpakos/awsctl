@@ -9,4 +9,4 @@ As per our $cloud Best Practices, if you wish to keep your instances running for
 Thank you.
 
 --
-Infrastructure & IT Team
+Infrastructure & IT Team (@it)
