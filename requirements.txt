@@ -1,4 +1,3 @@
-pep8
 boto3
 botocore
 prettytable
@@ -10,6 +9,8 @@ azure-common
 azure-mgmt-resource
 azure-mgmt-compute
 azure-mgmt-network
+azure-mgmt-hdinsight
 azure-monitor
 msrestazure
 ppmail
+pplogger

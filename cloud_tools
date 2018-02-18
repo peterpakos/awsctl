@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""A tool to manipulate clouds
+"""Tool to operate clouds.
 
 Author: Peter Pakos <peter.pakos@wandisco.com>
 
-Copyright (C) 2017 WANdisco
+Copyright (C) 2019 WANdisco
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -25,120 +25,146 @@ import argparse
 import os
 import sys
 from wdcloud import WDCloud
+from pplogger import get_logger
+
+__app_name__ = os.path.basename(sys.argv[0])
+__version__ = WDCloud.VERSION
+
+parser = argparse.ArgumentParser(description='Tool to operate clouds')
+
+parser.add_argument('-v', '--version', action='version', version='%s %s' % (__app_name__, __version__))
+parser.add_argument('--debug', action='store_true', dest='debug', help='debugging mode')
+parser.add_argument('--verbose', action='store_true', dest='verbose', help='verbose debugging mode')
+parser.add_argument('-c', '--cloud-provider', help='cloud provider (default: %(default)s)',
+                    dest='cloud_provider', choices=['aws', 'gcp', 'azure'], default='aws', type=str.lower)
+parser.add_argument('-p', '--profile-name', help='cloud profile name (default: %(default)s)',
+                    dest='profile_name', default='infra')
+
+subparsers = parser.add_subparsers(title='commands', dest='command')
+subparsers.required = True
+
+parser_list = subparsers.add_parser('list', help='display list of instances')
+parser_list.add_argument('-b', '--disable-border', help='disable table border', action='store_true',
+                         dest='disable_border')
+parser_list.add_argument('-H', '--disable-header', help='disable table header', action='store_true',
+                         dest='disable_header')
+parser_list.add_argument('-s', '--state', help='display instances only in certain states', action='append',
+                         dest='state', choices=['running', 'pending', 'shutting-down', 'stopped', 'stopping',
+                                                'terminated'])
+parser_list.add_argument('-n', '--notify', help='send notifications', action='store_true', dest='notify')
+parser_list.add_argument('-w', '--warning-threshold', help='warning emails threshold (hours, default: %(default)s)',
+                         dest='warning_threshold', default=12, type=int)
+parser_list.add_argument('-S', '--stop', help='stop instances running longer than set threshold', action='store_true',
+                         dest='stop')
+parser_list.add_argument('-c', '--critical-threshold', dest='critical_threshold', default=24, type=int,
+                         help='auto stop & alert threshold (hours, default: %(default)s)')
+parser_list.add_argument('-t', '--tag', dest='tag', help='show only tagged instances (key[:value] format)')
+
+parser_listregions = subparsers.add_parser('list-regions', help='display list of available regions', add_help=False)
+parser_listregions.add_argument('-b', '--disable-border', help='disable table border', action='store_true',
+                                dest='disable_border')
+parser_listregions.add_argument('-H', '--disable-header', help='disable table header', action='store_true',
+                                dest='disable_header')
+
+parser_list_hdi = subparsers.add_parser('list-hdi', help='display list of HDI clusters')
+parser_list_hdi.add_argument('-b', '--disable-border', help='disable table border', action='store_true',
+                             dest='disable_border')
+parser_list_hdi.add_argument('-H', '--disable-header', help='disable table header', action='store_true',
+                             dest='disable_header')
+parser_list_hdi.add_argument('-n', '--notify', help='send notifications', action='store_true', dest='notify')
+parser_list_hdi.add_argument('-w', '--warning-threshold', help='warning emails threshold (hours, default: %(default)s)',
+                             dest='warning_threshold', default=12, type=int)
+parser_list_hdi.add_argument('-S', '--stop', help='stop instances running longer than set threshold',
+                             action='store_true', dest='stop')
+parser_list_hdi.add_argument('-c', '--critical-threshold', dest='critical_threshold', default=24, type=int,
+                             help='auto stop & alert threshold (hours, default: %(default)s)')
+
+parser_exclude = subparsers.add_parser('exclude', help='exclude instances from alerting (create EXCLUDE tag)')
+parser_exclude.add_argument('-i', '--instance-id', help='instance id', nargs='+', dest='instance_id',
+                            required=True)
+
+parser_include = subparsers.add_parser('include', help='include instances in alerting (delete EXCLUDE tag)')
+parser_include.add_argument('-i', '--instance-id', help='instance id', nargs='+', dest='instance_id',
+                            required=True)
+
+parser_tag = subparsers.add_parser('tag', help='tag instances')
+parser_tag.add_argument('-i', '--id', help='instance id', nargs='+', dest='instance_id', required=True)
+parser_tag.add_argument('-k', '--key', help='key', dest='key', required=True)
+parser_tag.add_argument('-v', '--value', help='value', dest='value', default='')
+parser_tag.add_argument('-d', '--delete', help='delete tag', dest='delete', action='store_true', default=False)
+
+parser_sg = subparsers.add_parser('sg', help='batch edit Security Groups rules')
+parser_sg.add_argument('-c', '--cidr', help='IP address in CIDR notation', dest='cidr',
+                       required=True)
+parser_sg.add_argument('-d', '--delete', help='delete rule', dest='sg_delete', action='store_true',
+                       default=False)
+
+parser_public_buckets = subparsers.add_parser('public-buckets', help='check public buckets')
+parser_public_buckets.add_argument('-b', '--disable-border', help='disable table border',
+                                   action='store_true', dest='disable_border')
+parser_public_buckets.add_argument('-H', '--disable-header', help='disable table header',
+                                   action='store_true', dest='disable_header')
+
+parser_run = subparsers.add_parser('run', help='run instances')
+parser_run.add_argument('-r', '--region', help='region', dest='region', required=True)
+parser_run.add_argument('-s', '--subnet-id', help='subnet id', dest='subnet_id', required=True)
+parser_run.add_argument('-i', '--image-id', help='image id', dest='image_id_list', required=True, nargs='+')
+parser_run.add_argument('-t', '--instance-type', help='instance type', dest='instance_type', required=True)
+# noinspection PyTypeChecker
+parser_run.add_argument('-c', '--count', help='number of instances (default: %(default)s)', dest='count',
+                        default=1, type=int)
+parser_run.add_argument('-k', '--ssh-key', help='ssh key', dest='ssh_key')
+parser_run.add_argument('-p', '--private-ip', help='private IP', dest='private_ip')
+# noinspection PyTypeChecker
+parser_run.add_argument('-v', '--volume-size', help='OS volume size in GB (default: %(default)s)',
+                        dest='volume_size', type=int, default=10)
+parser_run.add_argument('-u', '--user-data', help='user data', dest='user_data', default='')
+parser_run.add_argument('-n', '--name', help='instance name')
+
+parser_create_image = subparsers.add_parser('create-image', help='create image')
+parser_create_image.add_argument('-r', '--region', help='region', dest='region', required=True)
+parser_create_image.add_argument('-i', '--id', dest='instance_ids', help='instance id', nargs='+')
+parser_create_image.add_argument('-t', '--tag', dest='tag',
+                                 help='create image of tagged instances (key[:value] format)')
+
+parser_stop = subparsers.add_parser('stop', help='stop instances')
+parser_stop.add_argument('-r', '--region', help='region', dest='region', required=True)
+parser_stop.add_argument('-i', '--id', dest='instance_ids', help='instance id', nargs='+')
+parser_stop.add_argument('-t', '--tag', dest='tag', help='stop tagged instances (key[:value] format)')
+
+parser_terminate = subparsers.add_parser('terminate', help='terminate instances')
+parser_terminate.add_argument('-r', '--region', help='region', dest='region', required=True)
+parser_terminate.add_argument('-i', '--id', dest='instance_ids', help='instance id', nargs='+')
+parser_terminate.add_argument('-t', '--tag', dest='tag', help='stop tagged instances (key[:value] format)')
+
+parser_start = subparsers.add_parser('start', help='start instances')
+parser_start.add_argument('-r', '--region', help='region', dest='region', required=True)
+parser_start.add_argument('-i', '--id', dest='instance_ids', help='instance id', nargs='+')
+parser_start.add_argument('-t', '--tag', dest='tag', help='start tagged instances (key[:value] format)')
+
+args = parser.parse_args()
+
+log = get_logger(name='cloud_tools', debug=args.debug, verbose=args.verbose)
 
 
-class Main(object):
-    VERSION = WDCloud.VERSION
-
-    def __init__(self):
-        self._args = self._parse_args()
-        self._cloud = WDCloud.loader(self._args.cloud_provider, self._args.profile_name, self._args.region)
-
-    def run(self):
-        if self._args.command == 'list':
-            self._cloud.list(disable_border=self._args.disable_border,
-                             disable_header=self._args.disable_header,
-                             state=self._args.state,
-                             notify=self._args.notify,
-                             stop=self._args.stop,
-                             warning_threshold=self._args.warning_threshold * 3600,
-                             critical_threshold=self._args.critical_threshold * 3600)
-        elif self._args.command == 'list-regions':
-            self._cloud.list_regions(disable_border=self._args.disable_border,
-                                     disable_header=self._args.disable_header)
-        elif self._args.command == 'exclude':
-            self._cloud.tag(instance_id=self._args.id,
-                            key='EXCLUDE',
-                            value='True')
-        elif self._args.command == 'include':
-            self._cloud.tag(instance_id=self._args.id,
-                            key='EXCLUDE',
-                            delete=True)
-        elif self._args.command == 'tag':
-            self._cloud.tag(instance_id=self._args.id,
-                            key=self._args.key,
-                            value=self._args.value,
-                            delete=self._args.delete)
-        elif self._args.command == 'sg':
-            self._cloud.sg(cidr=self._args.cidr, delete=self._args.sg_delete)
-        elif self._args.command == 'public-buckets':
-            self._cloud.public_buckets(disable_border=self._args.disable_border,
-                                       disable_header=self._args.disable_header)
+def die(message=None, code=1):
+    if message:
+        if code:
+            log.critical(message)
         else:
-            self.die('Command %s not implemented yet' % self._args.command)
+            log.info(message)
+    exit(code)
 
-    @staticmethod
-    def die(message=None, code=1):
-        if message is not None:
-            print(message, file=sys.stderr)
-        exit(code)
 
-    def _parse_args(self):
-        parser = argparse.ArgumentParser(description='A tool to manipulate clouds')
+def main():
+    log.debug(args)
+    cloud = WDCloud.loader(args.cloud_provider, args.profile_name)
 
-        parser.add_argument('--version', action='version', version='%s %s' % (os.path.basename(sys.argv[0]),
-                                                                              self.VERSION))
-        parser.add_argument('-c', '--cloud-provider', help='cloud provider (default: %(default)s)',
-                            dest='cloud_provider', choices=['aws', 'gcp', 'azure'], default='aws')
-        parser.add_argument('-p', '--profile-name', help='cloud profile name (default: %(default)s)',
-                            dest='profile_name', default='infra')
-        parser.add_argument('-r', '--region', help='choose single region (default: all)', dest='region')
-
-        subparsers = parser.add_subparsers(title='commands', dest='command')
-        parser_describe_instances = subparsers.add_parser('list', help='display list of instances')
-        parser_describe_instances.add_argument('-b', '--disable-border', help='disable table border',
-                                               action='store_true', dest='disable_border')
-        parser_describe_instances.add_argument('-H', '--disable-header', help='disable table header',
-                                               action='store_true', dest='disable_header')
-        parser_describe_instances.add_argument('-s', '--state', help='display instances only in certain states',
-                                               action='append', dest='state',
-                                               choices=['running', 'pending', 'shutting-down', 'stopped', 'stopping',
-                                                        'terminated'])
-        parser_describe_instances.add_argument('-n', '--notify', help='send notification and warning emails',
-                                               action='store_true', dest='notify')
-        parser_describe_instances.add_argument('-t', '--warning-threshold',
-                                               help='warning emails threshold (hours, default: %(default)s)',
-                                               dest='warning_threshold', default=12, type=int)
-        parser_describe_instances.add_argument('-S', '--stop', help='stop instances running longer than set threshold',
-                                               action='store_true', dest='stop')
-        parser_describe_instances.add_argument('-T', '--critical-threshold', dest='critical_threshold',
-                                               default=24, type=int,
-                                               help='auto stop & alert threshold (hours, default: %(default)s)')
-
-        parser_describe_regions = subparsers.add_parser('list-regions', help='display list of available regions')
-        parser_describe_regions.add_argument('-b', '--disable-border', help='disable table border',
-                                             action='store_true', dest='disable_border')
-        parser_describe_regions.add_argument('-H', '--disable-header', help='disable table header',
-                                             action='store_true', dest='disable_header')
-
-        parser_exclude = subparsers.add_parser('exclude', help='exclude instances from alerting (create EXCLUDE tag)')
-        parser_exclude.add_argument('-i', '--id', help='instance id', action='append', dest='id', required=True)
-
-        parser_include = subparsers.add_parser('include', help='include instances in alerting (delete EXCLUDE tag)')
-        parser_include.add_argument('-i', '--id', help='instance id', action='append', dest='id', required=True)
-
-        parser_tag = subparsers.add_parser('tag', help='tag instances')
-        parser_tag.add_argument('-i', '--id', help='instance id', action='append', dest='id', required=True)
-        parser_tag.add_argument('-k', '--key', help='key', dest='key', required=True)
-        parser_tag.add_argument('-v', '--value', help='value', dest='value', default='')
-        parser_tag.add_argument('-d', '--delete', help='delete tag', dest='delete', action='store_true', default=False)
-
-        parser_sg = subparsers.add_parser('sg', help='batch edit Security Groups rules')
-        parser_sg.add_argument('-c', '--cidr', help='IP address in CIDR notation', dest='cidr',
-                               required=True)
-        parser_sg.add_argument('-d', '--delete', help='delete rule', dest='sg_delete', action='store_true',
-                               default=False)
-        parser_public_buckets = subparsers.add_parser('public-buckets', help='check public buckets')
-        parser_public_buckets.add_argument('-b', '--disable-border', help='disable table border',
-                                           action='store_true', dest='disable_border')
-        parser_public_buckets.add_argument('-H', '--disable-header', help='disable table header',
-                                           action='store_true', dest='disable_header')
-
-        return parser.parse_args()
+    getattr(cloud, args.command.replace('-', '_'))(**vars(args))
 
 
 if __name__ == '__main__':
     try:
-        Main().run()
+        main()
     except KeyboardInterrupt:
-        print('\nCancelling...')
+        die('\nCancelling...', 130)

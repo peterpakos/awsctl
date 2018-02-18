@@ -1,5 +1,5 @@
 # cloud_tools
-A tool to manipulate clouds
+Tool to operate clouds
 
 ## AWS configuration
 ### AWS CLI
@@ -37,31 +37,40 @@ The tool uses Python module Boto 3 to talk to AWS ([Boto 3 documentation](http:/
 ## Usage
 
 ~~~
-$ ./cloud_tools -h
-usage: cloud_tools [-h] [--version] [-c {aws,gce,azure}] [-p PROFILE_NAME]
-                   [-r REGION]
-                   {describe-instances,describe-regions,exclude,include,tag}
+$ cloud_tools --help
+usage: cloud_tools [-h] [-v] [--debug] [--verbose] [-c {aws,gcp,azure}]
+                   [-p PROFILE_NAME]
+                   {list,list-regions,list-hdi,exclude,include,tag,sg,public-buckets,run,create-image,stop,terminate,start}
                    ...
 
-A tool to manipulate clouds
+Tool to operate clouds
 
 optional arguments:
   -h, --help            show this help message and exit
-  --version             show program's version number and exit
-  -c {aws,gce,azure}, --cloud-provider {aws,gce,azure}
+  -v, --version         show program's version number and exit
+  --debug               debugging mode
+  --verbose             verbose debugging mode
+  -c {aws,gcp,azure}, --cloud-provider {aws,gcp,azure}
                         cloud provider (default: aws)
   -p PROFILE_NAME, --profile-name PROFILE_NAME
-                        cloud profile name (default: default)
-  -r REGION, --region REGION
-                        choose single region (default: all)
+                        cloud profile name (default: infra)
 
 commands:
-  {describe-instances,describe-regions,exclude,include,tag}
-    describe-instances  display list of instances
-    describe-regions    display list of available regions
+  {list,list-regions,list-hdi,exclude,include,tag,sg,public-buckets,run,create-image,stop,terminate,start}
+    list                display list of instances
+    list-regions        display list of available regions
+    list-hdi            display list of HDI clusters
     exclude             exclude instances from alerting (create EXCLUDE tag)
     include             include instances in alerting (delete EXCLUDE tag)
     tag                 tag instances
+    sg                  batch edit Security Groups rules
+    public-buckets      check public buckets
+    run                 run instances
+    create-image        create image
+    stop                stop instances
+    terminate           terminate instances
+    start               start instances
+
 ~~~
 
 ## AWS Lambda function
