@@ -19,7 +19,7 @@ log = logging.getLogger('cloud_tools')
 
 
 class WDCloud(object):
-    VERSION = '1.2.0'
+    VERSION = '1.2.1'
     __metaclass__ = abc.ABCMeta
 
     def __init__(self, cloud_provider, profile_name):
@@ -33,7 +33,11 @@ class WDCloud(object):
         self._cloud_name = cloud_names[cloud_provider]
         self._profile_name = profile_name
         self._regions = []
-        self._mailer = Mailer(slack=True)
+        try:
+            self._mailer = Mailer(slack=True)
+        except Exception as e:
+            log.critical(e)
+            exit(1)
 
         self._bp_url = {
             'AWS': 'https://workspace.wandisco.com/display/IT/AWS+Best+Practices+at+WANdisco',
@@ -146,6 +150,10 @@ class WDCloud(object):
             some_of_them = 'that'
 
         sender = CONFIG.EMAIL_FROM
+
+        if user.endswith('.api'):
+            user = user.replace('.api', '')
+
         recipient = user + '@' + CONFIG.EMAIL_DOMAIN
 
         cc_recipient = []
@@ -153,7 +161,9 @@ class WDCloud(object):
             for profile in profiles:
                 profile = profile.partition('-')[0].lower()
                 if profile in CONFIG.HEADS:
-                    cc_recipient += CONFIG.HEADS[profile]
+                    for head in CONFIG.HEADS[profile]:
+                        if head not in cc_recipient:
+                            cc_recipient.append(head)
             if recipient in cc_recipient:
                 cc_recipient.remove(recipient)
 
