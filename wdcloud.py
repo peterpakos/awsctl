@@ -19,7 +19,7 @@ log = logging.getLogger('cloud_tools')
 
 
 class WDCloud(object):
-    VERSION = '1.2.1'
+    VERSION = '1.2.2'
     __metaclass__ = abc.ABCMeta
 
     def __init__(self, cloud_provider, profile_name):

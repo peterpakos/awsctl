@@ -69,7 +69,7 @@ class GCP(WDCloud):
                                          'Launch time', 'Uptime', 'User', 'Private IP', 'Public IP',
                                          'Exclude'],
                                         border=not disable_border, header=not disable_header, reversesort=True,
-                                        sortby='Creation time')
+                                        sortby='Launch time')
         table.align = 'l'
         i = 0
         states_dict = {}
@@ -102,7 +102,10 @@ class GCP(WDCloud):
                 instance_type = str(instance.get('machineType')).rsplit('/', 1)[1]
                 image_name = str(instance.get('disks')[0]['licenses'][0]).rsplit('/', 1)[1]
                 private_ip_address = instance.get('networkInterfaces')[0].get('networkIP')
-                public_ip_address = instance.get('networkInterfaces')[0]['accessConfigs'][0].get('natIP')
+                try:
+                    public_ip_address = instance.get('networkInterfaces')[0]['accessConfigs'][0].get('natIP')
+                except KeyError:
+                    public_ip_address = ''
                 public_ip_address = public_ip_address or ''
                 last_user = self._operations_get(operations, instance_id, 'user')
                 last_user = str(last_user).split('@', 1)[0] if last_user else ''
